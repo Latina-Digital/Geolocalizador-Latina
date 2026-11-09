@@ -1,0 +1,10 @@
+{
+  "name": "Remix GEO LATINA - Control de Rutas Industrial Latina",
+  "description": "Sistema avanzado de geolocalización, control de rutas en tiempo real y optimización de visitas para ejecutivos comerciales y transportistas de Industrial Latina.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:root {
+  --geolatina-primary: #0A2540;
+  --geolatina-secondary: #F59E0B;
+  --geolatina-accent-red: #D32F2F;
+  --geolatina-page-bg: #070d1e;
+  --geolatina-card-bg: #0f172a;
+  --geolatina-text: #f1f5f9;
+  --geolatina-font-size: 16px;
+  --geolatina-radius: 0.75rem;
+  --geolatina-font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  html {
+    font-size: var(--geolatina-font-size);
+  }
+  body {
+    font-family: var(--geolatina-font-family);
+    background-color: var(--geolatina-page-bg);
+    color: var(--geolatina-text);
+    overflow-x: hidden;
+    min-height: 100dvh;
+  }
+}
+
+/* Custom leaflet map adjustments */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--geolatina-radius);
+  z-index: 10;
+  font-family: inherit;
+}
+
+/* Dark theme tiles filter option & custom popup */
+.leaflet-popup-content-wrapper {
+  background: #1e293b;
+  color: #f8fafc;
+  border-radius: var(--geolatina-radius);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  border: 1px solid #334155;
+}
+.leaflet-popup-tip {
+  background: #1e293b;
+}
+
+/* Pulse animation for active GPS marker */
+@keyframes gps-pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(217, 119, 6, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+}
+
+.gps-live-ping {
+  animation: gps-pulse 2s infinite;
+}
+
+/* Smartphone touch ergonomics (< 640px) */
+@media (max-width: 640px) {
+  button, select, input[type="text"], input[type="password"], input[type="number"] {
+    min-height: 40px;
+  }
+}
+
+/* Native A4 Print & PDF Export rules */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  #geolatina-native-a4-printable {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  #geolatina-native-a4-printable thead {
+    display: table-header-group !important;
+  }
+  #geolatina-native-a4-printable tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
