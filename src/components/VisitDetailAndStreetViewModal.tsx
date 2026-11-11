@@ -72,6 +72,11 @@ export const VisitDetailAndStreetViewModal: React.FC<VisitDetailAndStreetViewMod
   useEffect(() => {
     if (!showStreetViewPanorama || !visit || !streetViewContainerRef.current) return;
 
+    if (typeof window !== 'undefined' && Boolean((window as any).__gmpBillingRestricted)) {
+      setStreetViewStatus('UNAVAILABLE');
+      return;
+    }
+
     setStreetViewStatus('LOADING');
     if (typeof window !== 'undefined' && (window as any).google?.maps?.StreetViewPanorama) {
       try {
@@ -94,13 +99,7 @@ export const VisitDetailAndStreetViewModal: React.FC<VisitDetailAndStreetViewMod
               });
               setStreetViewStatus('READY');
             } else {
-              // Inicializar panorama directo en las coordenadas por si hay cobertura cercana
-              new google.maps.StreetViewPanorama(streetViewContainerRef.current, {
-                position: targetLatLng,
-                pov: { heading: 165, pitch: 5 },
-                zoom: 1,
-              });
-              setStreetViewStatus('READY');
+              setStreetViewStatus('UNAVAILABLE');
             }
           }
         );

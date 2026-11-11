@@ -20,6 +20,8 @@ import {
   saveGoogleMapsApiKeyToSysConfig,
   loadGoogleMapsScriptDynamically,
   canUserAccessTicConfig,
+  downloadAndroidCapacitorPackage,
+  buildAndroidCapacitorConfigBundle,
 } from '../services/latinaApiEngine';
 import { useGeoLatinaSystem } from '../context/GeoLatinaSystemContext';
 import {
@@ -42,9 +44,10 @@ import {
   Sliders,
   Terminal,
   RefreshCw,
+  Smartphone,
 } from 'lucide-react';
 
-type ConfigTabId = 'interconexion' | 'seguridad' | 'mapeo' | 'diagnostico';
+type ConfigTabId = 'interconexion' | 'seguridad' | 'mapeo' | 'diagnostico' | 'apk_movil';
 
 export const SystemConfigModal: React.FC = () => {
   const {
@@ -368,12 +371,12 @@ export const SystemConfigModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 4 Navigation Tabs */}
-        <div className="bg-[#0F172A] px-4 sm:px-6 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-1 shrink-0">
+        {/* 5 Navigation Tabs */}
+        <div className="bg-[#0F172A] px-4 sm:px-6 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-1 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('interconexion')}
-            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'interconexion'
                 ? 'border-amber-500 text-amber-400 bg-slate-900/60'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -386,7 +389,7 @@ export const SystemConfigModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('seguridad')}
-            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'seguridad'
                 ? 'border-amber-500 text-amber-400 bg-slate-900/60'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -399,7 +402,7 @@ export const SystemConfigModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('mapeo')}
-            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'mapeo'
                 ? 'border-amber-500 text-amber-400 bg-slate-900/60'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -412,7 +415,7 @@ export const SystemConfigModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('diagnostico')}
-            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`px-3 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'diagnostico'
                 ? 'border-amber-500 text-amber-400 bg-slate-900/60'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -420,6 +423,19 @@ export const SystemConfigModal: React.FC = () => {
           >
             <Activity className="w-3.5 h-3.5 shrink-0" />
             <span>D. Diagnóstico y Respaldo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('apk_movil')}
+            className={`px-3 py-3 text-xs font-bold border-b-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'apk_movil'
+                ? 'border-emerald-400 text-emerald-300 bg-emerald-950/30'
+                : 'border-transparent text-emerald-400/80 hover:text-emerald-300'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            <span>📱 Distribución APK Móvil</span>
           </button>
         </div>
 
@@ -568,6 +584,74 @@ export const SystemConfigModal: React.FC = () => {
                       onChange={(e) => setDraft({ ...draft, gpsAlertsEndpoint: e.target.value })}
                       className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
                     />
+                  </div>
+                </div>
+
+                {/* Sección ERP/CRM e Inteligencia de Negocios (SQL Server / LatinaWebApi) */}
+                <div className="pt-3 border-t border-slate-700/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                      Endpoints de Inteligencia Comercial ERP/CRM y Cobranzas (SQL Server)
+                    </h4>
+                    <span className="text-[10px] font-mono text-emerald-400">Latina & Induless BI</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="cfg-portfolio-cascade-endpoint" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                        Endpoint de Cartera y Cascada Jerárquica
+                      </label>
+                      <input
+                        id="cfg-portfolio-cascade-endpoint"
+                        type="text"
+                        value={draft.portfolioCascadeEndpoint || '/api/Clientes/CarteraEjecutivo'}
+                        onChange={(e) => setDraft({ ...draft, portfolioCascadeEndpoint: e.target.value })}
+                        placeholder="/api/Clientes/CarteraEjecutivo"
+                        className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cfg-sales-12m-endpoint" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                        Endpoint de Historial de Ventas 12 Meses
+                      </label>
+                      <input
+                        id="cfg-sales-12m-endpoint"
+                        type="text"
+                        value={draft.salesHistory12MEndpoint || '/api/Ventas/Historial12Meses'}
+                        onChange={(e) => setDraft({ ...draft, salesHistory12MEndpoint: e.target.value })}
+                        placeholder="/api/Ventas/Historial12Meses"
+                        className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cfg-opportunities-endpoint" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                        Endpoint de Catálogo y Oportunidades Latina/Induless
+                      </label>
+                      <input
+                        id="cfg-opportunities-endpoint"
+                        type="text"
+                        value={draft.productOpportunitiesEndpoint || '/api/Productos/PotencialCliente'}
+                        onChange={(e) => setDraft({ ...draft, productOpportunitiesEndpoint: e.target.value })}
+                        placeholder="/api/Productos/PotencialCliente"
+                        className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cfg-collections-endpoint" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                        Endpoint de Facturas por Vencer y Seguimiento de Cobros
+                      </label>
+                      <input
+                        id="cfg-collections-endpoint"
+                        type="text"
+                        value={draft.invoicesCollectionsEndpoint || '/api/Cobranzas/FacturasPendientes'}
+                        onChange={(e) => setDraft({ ...draft, invoicesCollectionsEndpoint: e.target.value })}
+                        placeholder="/api/Cobranzas/FacturasPendientes"
+                        className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1196,6 +1280,199 @@ export const SystemConfigModal: React.FC = () => {
                     <RotateCcw className="w-4 h-4 text-red-400" />
                     <span>Restaurar Valores por Defecto</span>
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB E: 📱 DISTRIBUCIÓN APK MÓVIL Y EMPAQUETADO ANDROID (WEBVIEW / CAPACITOR) */}
+          {activeTab === 'apk_movil' && (
+            <div className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-700/70">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span>📱 Distribución APK Móvil y Empaquetado Android (WebView / Capacitor)</span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Configure la URL de descarga del instalador `.APK` alojado en IIS o almacenamiento corporativo, controle versiones y exporte la plantilla nativa para Android Studio.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black">
+                  Versión Activa: {draft.apkVersion || 'v2.4.0'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-8">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="cfg-apk-url" className="text-xs font-semibold text-slate-200">
+                      URL de Descarga del archivo `.APK` (Servidor IIS o Almacenamiento Corporativo)
+                    </label>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            apkDownloadUrl: '/descargas/GEOLATINA_IndustrialLatina.apk',
+                          })
+                        }
+                        className="text-emerald-400 hover:underline cursor-pointer"
+                      >
+                        APK Local Integrado
+                      </button>
+                      <span className="text-slate-600">·</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            apkDownloadUrl:
+                              'https://servidor-iis.industriallatina.com/LatinaWebApi/descargas/geolatina.apk',
+                          })
+                        }
+                        className="text-amber-400 hover:underline cursor-pointer"
+                      >
+                        Servidor IIS LatinaWebApi
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    id="cfg-apk-url"
+                    type="text"
+                    value={draft.apkDownloadUrl || '/descargas/GEOLATINA_IndustrialLatina.apk'}
+                    onChange={(e) => setDraft({ ...draft, apkDownloadUrl: e.target.value })}
+                    placeholder="https://servidor-iis.industriallatina.com/LatinaWebApi/descargas/geolatina.apk"
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="md:col-span-4">
+                  <label htmlFor="cfg-apk-version" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                    Versión Actual del APK (`apkVersion`)
+                  </label>
+                  <input
+                    id="cfg-apk-version"
+                    type="text"
+                    value={draft.apkVersion || 'v2.4.0'}
+                    onChange={(e) => setDraft({ ...draft, apkVersion: e.target.value })}
+                    placeholder="v2.4.0"
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="cfg-apk-target-web" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                    URL de Producción embebida en el WebView / Capacitor
+                  </label>
+                  <input
+                    id="cfg-apk-target-web"
+                    type="text"
+                    value={draft.apkTargetWebUrl || 'https://geolatina.ai.studio/'}
+                    onChange={(e) => setDraft({ ...draft, apkTargetWebUrl: e.target.value })}
+                    placeholder="https://geolatina.ai.studio/"
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-sky-300 font-mono focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                {/* Switch "Forzar Actualización de APK" */}
+                <div className="bg-[#0F172A] border border-amber-500/40 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black text-amber-300">
+                      🔔 Forzar Actualización de APK
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Notifica inmediatamente en pantalla a los Ejecutivos de Ventas cuando hay una nueva versión disponible.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.forceApkUpdate)}
+                      onChange={(e) => setDraft({ ...draft, forceApkUpdate: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-xs font-bold text-white">
+                      {draft.forceApkUpdate ? 'ACTIVO' : 'Inactivo'}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="cfg-apk-notes" className="block text-xs font-semibold text-slate-200 mb-1.5">
+                  Notas de la Versión (Release Notes para Ejecutivos y Supervisores)
+                </label>
+                <textarea
+                  id="cfg-apk-notes"
+                  rows={2}
+                  value={draft.apkReleaseNotes || ''}
+                  onChange={(e) => setDraft({ ...draft, apkReleaseNotes: e.target.value })}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Generador y Descarga del Paquete de Configuración Android (WebView / Capacitor) */}
+              <div className="bg-gradient-to-br from-slate-900 via-[#0F172A] to-slate-950 border border-emerald-500/40 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-emerald-300">
+                      🛠️ Generador de Paquete Base Android Studio (WebView / Capacitor)
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Exporta <code className="text-amber-300">capacitor.config.json</code>,{' '}
+                      <code className="text-amber-300">manifest.json</code>,{' '}
+                      <code className="text-amber-300">AndroidManifest.xml</code> y{' '}
+                      <code className="text-amber-300">MainActivity.java</code> preconfigurados con{' '}
+                      <strong className="text-emerald-300">ACCESS_FINE_LOCATION</strong> e{' '}
+                      <strong className="text-emerald-300">INTERNET</strong> apuntando a{' '}
+                      <code className="text-sky-300">
+                        {draft.apkTargetWebUrl || 'https://geolatina.ai.studio/'}
+                      </code>
+                      .
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      downloadAndroidCapacitorPackage(draft);
+                      setSaveBanner(
+                        'Paquete de Configuración Android (WebView / Capacitor) exportado exitosamente.'
+                      );
+                      setTimeout(() => setSaveBanner(null), 4000);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-lg flex items-center gap-2 shrink-0 cursor-pointer transition-all"
+                  >
+                    <Download className="w-4 h-4 shrink-0" />
+                    <span>🛠️ Descargar Paquete de Configuración Android (WebView / Capacitor)</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase text-amber-300 mb-1">
+                      Vista Previa: capacitor.config.json
+                    </span>
+                    <pre className="w-full h-32 overflow-auto bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-[10px] font-mono text-emerald-300">
+                      {JSON.stringify(
+                        buildAndroidCapacitorConfigBundle(draft).capacitorConfigJson,
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase text-sky-300 mb-1">
+                      Vista Previa: AndroidManifest.xml (GPS + Internet)
+                    </span>
+                    <pre className="w-full h-32 overflow-auto bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-[10px] font-mono text-sky-200">
+                      {buildAndroidCapacitorConfigBundle(draft).androidManifestXml}
+                    </pre>
+                  </div>
                 </div>
               </div>
             </div>

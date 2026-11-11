@@ -34,7 +34,10 @@ import {
   saveGoogleMapsApiKeyToSysConfig,
   canUserAccessTicConfig,
 } from '../services/latinaApiEngine';
-import { computeStreetNetworkRouteWithDirectionsService } from '../utils/googleMapsRouting';
+import {
+  computeStreetNetworkRouteWithDirectionsService,
+  extractDetailedStepsPathFromGoogleRoute,
+} from '../utils/googleMapsRouting';
 import { calculateDistanceKm } from '../utils/geoCalculations';
 import { LatLngPoint } from '../types';
 import { KeyRound, Settings, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -62,12 +65,12 @@ export interface GoogleMapEngineProps {
 }
 
 /**
- * Construye las opciones de polilínea (`google.maps.PolylineOptions`) para `DirectionsRenderer`
- * y segmentos viales incorporando vectores `google.maps.SymbolPath.FORWARD_CLOSED_ARROW`
- * repetidos a lo largo de la ruta para indicar el sentido de circulación en cada calle.
+ * Construye las opciones de polilínea (`google.maps.PolylineOptions`) para segmentos viales
+ * incorporando vectores `google.maps.SymbolPath.FORWARD_CLOSED_ARROW` cada `60px`
+ * con color naranja corporativo (`#FF6D00` / `#F59E0B`) y grosor `5px`.
  */
 export function createDirectionalPolylineOptions(
-  strokeColor: string = '#D97706',
+  strokeColor: string = '#FF6D00',
   strokeWeight: number = 5
 ): google.maps.PolylineOptions {
   const forwardArrowSymbol: google.maps.Symbol = {
@@ -85,13 +88,13 @@ export function createDirectionalPolylineOptions(
   return {
     geodesic: true,
     strokeColor,
-    strokeOpacity: 0.95,
+    strokeOpacity: 0.96,
     strokeWeight,
     icons: [
       {
         icon: forwardArrowSymbol,
-        offset: '45px',
-        repeat: '90px',
+        offset: '30px',
+        repeat: '60px',
       },
     ],
   };
@@ -239,36 +242,37 @@ const GoogleMapNativeInstanceController: React.FC<{
     };
   }, [map, showTrafficLayer]);
 
-  // 3. Si se proveen `directionsResults` explícitos, renderizarlos mediante `google.maps.DirectionsRenderer`
-  // aplicando `polylineOptions` con `google.maps.SymbolPath.FORWARD_CLOSED_ARROW`
+  // 3. Si se proveen `directionsResults` explícitos, extraer `route.legs[i].steps[j].path` detallados
+  // aplicando `polylineOptions` con `google.maps.SymbolPath.FORWARD_CLOSED_ARROW` cada 60px
   useEffect(() => {
-    if (!map || typeof google === 'undefined' || !google.maps?.DirectionsRenderer) return;
+    if (!map || typeof google === 'undefined' || !google.maps?.Polyline) return;
 
     directionsRenderersRef.current.forEach((dr) => dr.setMap(null));
     directionsRenderersRef.current = [];
 
     if (!directionsResults || directionsResults.length === 0) return;
 
-    const polylineOpts = createDirectionalPolylineOptions('#D97706', 5);
+    const polylineOpts = createDirectionalPolylineOptions('#FF6D00', 5);
+    const createdPolys: google.maps.Polyline[] = [];
 
     directionsResults.forEach((result) => {
-      const renderer = new google.maps.DirectionsRenderer({
-        map,
-        directions: result,
-        suppressMarkers: true,
-        preserveViewport: true,
-        polylineOptions: polylineOpts,
-      });
-      directionsRenderersRef.current.push(renderer);
+      const detailedStepsPath = extractDetailedStepsPathFromGoogleRoute(result?.routes?.[0]);
+      if (detailedStepsPath && detailedStepsPath.length > 1) {
+        const poly = new google.maps.Polyline({
+          ...polylineOpts,
+          path: detailedStepsPath,
+          map,
+        });
+        createdPolys.push(poly);
+      }
     });
 
     return () => {
-      directionsRenderersRef.current.forEach((dr) => dr.setMap(null));
-      directionsRenderersRef.current = [];
+      createdPolys.forEach((p) => p.setMap(null));
     };
   }, [map, directionsResults]);
 
-  // 4. Trazado vial por segmentos con `DirectionsRenderer` / `Polyline` y flechas `FORWARD_CLOSED_ARROW`
+  // 4. Trazado vial por segmentos con `Polyline` y flechas `FORWARD_CLOSED_ARROW`
   // a partir de `routeWaypoints` cronológicos
   useEffect(() => {
     if (!map || typeof google === 'undefined') return;
@@ -297,18 +301,7 @@ const GoogleMapNativeInstanceController: React.FC<{
 
       if (cancelled || !map) return;
 
-      const directionalOptions = createDirectionalPolylineOptions('#D97706', 5);
-
-      // Si `DirectionsRenderer` está disponible en el SDK, configurar su instancia con `polylineOptions`
-      // que incluyen `google.maps.SymbolPath.FORWARD_CLOSED_ARROW`
-      if (google.maps?.DirectionsRenderer && directionsRenderersRef.current.length === 0) {
-        const segmentRenderer = new google.maps.DirectionsRenderer({
-          suppressMarkers: true,
-          preserveViewport: true,
-          polylineOptions: directionalOptions,
-        });
-        directionsRenderersRef.current.push(segmentRenderer);
-      }
+      const directionalOptions = createDirectionalPolylineOptions('#FF6D00', 5);
 
       const effectivePath = fullRoadPath.length >= 2 ? fullRoadPath : routeWaypoints;
       const poly = new google.maps.Polyline({
@@ -423,6 +416,32 @@ export const GoogleMapEngine: React.FC<GoogleMapEngineProps> = ({
       active = false;
     };
   }, [verifiedApiKey]);
+
+  // Limpiar automáticamente cualquier modal de restricción de facturación (`.dismissButton`)
+  // inyectado por Google Maps si el proyecto Cloud aún no tiene cuenta de facturación vinculada
+  useEffect(() => {
+    const container = mapWrapperRef.current;
+    if (!container || typeof MutationObserver === 'undefined') return;
+
+    const cleanBillingOverlay = () => {
+      const dismissButtons = container.querySelectorAll<HTMLButtonElement>('button.dismissButton');
+      dismissButtons.forEach((btn) => {
+        const dialogOverlay = btn.closest('div[style*="background-color"]') as HTMLElement | null;
+        if (dialogOverlay) {
+          dialogOverlay.style.display = 'none';
+        } else {
+          btn.click();
+        }
+      });
+    };
+
+    const observer = new MutationObserver(() => {
+      cleanBillingOverlay();
+    });
+    observer.observe(container, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [verifiedApiKey, isScriptReady]);
 
   const handleQuickSaveKey = (e: React.FormEvent) => {
     e.preventDefault();

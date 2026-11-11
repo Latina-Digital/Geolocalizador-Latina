@@ -16,6 +16,7 @@ import {
   getRoleHierarchyLevel,
   mapRoleToGeoLatinaRole,
   canUserAccessTicConfig,
+  buildAndroidCapacitorConfigBundle,
 } from './latinaApiEngine';
 
 test('getDefaultSysConfig initializes live Syspro Users API parameters', () => {
@@ -225,5 +226,17 @@ test('canUserAccessTicConfig restricts TIC connection configurations strictly to
   assert.equal(canUserAccessTicConfig({ usuario: 'LRAMIREZ', rol: 'JEFE DE VENTAS' }), false);
   assert.equal(canUserAccessTicConfig({ usuario: 'ACASTRO', rol: 'JEFE DE COMPRAS' }), false);
   assert.equal(canUserAccessTicConfig({ usuario: 'DVERA', rol: 'AUXILIAR DE BODEGA' }), false);
+});
+
+test('buildAndroidCapacitorConfigBundle generates capacitor.config.json, AndroidManifest.xml with ACCESS_FINE_LOCATION and INTERNET, and MainActivity.java', () => {
+  const config = getDefaultSysConfig();
+  const bundle = buildAndroidCapacitorConfigBundle(config);
+
+  assert.equal(bundle.capacitorConfigJson.appId, 'com.industriallatina.geolatina');
+  assert.equal(bundle.capacitorConfigJson.server.url, 'https://geolatina.ai.studio/');
+  assert.match(bundle.androidManifestXml, /ACCESS_FINE_LOCATION/);
+  assert.match(bundle.androidManifestXml, /INTERNET/);
+  assert.match(bundle.mainActivityJava, /AppCompatActivity/);
+  assert.match(bundle.mainActivityJava, /ACCESS_FINE_LOCATION/);
 });
 

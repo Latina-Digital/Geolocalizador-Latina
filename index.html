@@ -3,12 +3,57 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <script>
+      (function () {
+        var GMP_ERROR_PATTERN = /BillingNotEnabledMapError|enable Billing on the Google Cloud Project|project\/_\/billing\/enable|gmp-get-started|LegacyApiNotActivatedMapError|ApiNotActivatedMapError|RefererNotAllowedMapError|InvalidKeyMapError|OverQuotaMapError|QuotaExceededError|DIRECTIONS_ROUTE|REQUEST_DENIED/i;
+        window.__gmpBillingRestricted = false;
+        window.gm_authFailure = function () {
+          window.__gmpBillingRestricted = true;
+          window.dispatchEvent(new CustomEvent('gmp-billing-error', { detail: 'BillingNotEnabledMapError' }));
+          window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+        };
+        var origError = console.error;
+        var origWarn = console.warn;
+        console.error = function () {
+          var args = Array.prototype.slice.call(arguments);
+          var msg = args.map(function (a) {
+            if (typeof a === 'string') return a;
+            if (a && typeof a.message === 'string') return a.message;
+            try { return String(a); } catch (e) { return ''; }
+          }).join(' ');
+          if (GMP_ERROR_PATTERN.test(msg)) {
+            window.__gmpBillingRestricted = true;
+            window.__gmpLastDiagnosticMessage = msg;
+            window.dispatchEvent(new CustomEvent('gmp-billing-error', { detail: msg }));
+            window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+            return;
+          }
+          return origError.apply(console, args);
+        };
+        console.warn = function () {
+          var args = Array.prototype.slice.call(arguments);
+          var msg = args.map(function (a) { return typeof a === 'string' ? a : ''; }).join(' ');
+          if (/loaded directly without loading=async|google\.maps\.Marker is deprecated/i.test(msg)) {
+            return;
+          }
+          return origWarn.apply(console, args);
+        };
+      })();
+    </script>
     <title>GEO LATINA - Control de Rutas Industrial Latina</title>
     <meta name="description" content="Sistema avanzado de geolocalización, control de rutas en tiempo real y optimización de visitas para ejecutivos comerciales y transportistas de Industrial Latina." />
     <meta property="og:title" content="GEO LATINA - Control de Rutas Industrial Latina" />
     <meta property="og:description" content="Sistema avanzado de geolocalización, control de rutas en tiempo real y optimización de visitas para ejecutivos comerciales y transportistas de Industrial Latina." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0A2540" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GEOLATINA" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">

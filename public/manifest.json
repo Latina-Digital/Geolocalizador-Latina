@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "GEOLATINA — Control Comercial y Rutas Industrial Latina S.A.",
+  "short_name": "GEOLATINA",
+  "description": "Plataforma corporativa de georreferenciación satelital, inteligencia comercial 12M (Latina & Induless) y gestión de cobranzas de Industrial Latina S.A.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070D1E",
+  "theme_color": "#0A2540",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

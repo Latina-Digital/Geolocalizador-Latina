@@ -39,10 +39,30 @@ import { GpsAntiFraudModal } from './components/GpsAntiFraudModal';
 import { AdminUiBuilderModal } from './components/AdminUiBuilderModal';
 import { NativePdfReportModal, NativeReportMode } from './components/NativePdfReportModal';
 import { ProductionVisitRegistrationModal } from './components/ProductionVisitRegistrationModal';
+import { HierarchyCascadeBar } from './components/HierarchyCascadeBar';
+import { CommercialPortfolioAnalysisView } from './components/CommercialPortfolioAnalysisView';
+import { ReceivablesCollectionsView } from './components/ReceivablesCollectionsView';
 import { GeoLatinaSystemProvider, useGeoLatinaSystem } from './context/GeoLatinaSystemContext';
 import { canUserAccessTicConfig } from './services/latinaApiEngine';
+import {
+  CascadeFilterState,
+  ClientPortfolioRecord,
+  CollectionManagementStatus,
+  ProductOpportunityRecommendation,
+  ReceivableInvoiceRecord,
+  applyInvoiceFollowUpToCollection,
+  filterInvoicesByCascade,
+  filterPortfolioByCascade,
+  loadClientPortfolioFromCache,
+  loadCommittedOpportunitiesFromCache,
+  loadReceivableInvoicesFromCache,
+  resolveEffectiveCascadeFilter,
+  saveCommittedOpportunitiesToCache,
+  saveReceivableInvoicesToCache,
+  syncCommercialEventToLatinaWebApi,
+} from './services/commercialIntelligenceEngine';
 import { CustomGeofence } from './types';
-import { ShieldAlert, Smartphone, Monitor, Plus, Settings } from 'lucide-react';
+import { ShieldAlert, Smartphone, Monitor, Plus, Settings, Users, CreditCard, Map as MapIcon } from 'lucide-react';
 
 export default function App() {
   return (
@@ -57,6 +77,7 @@ export default function App() {
 function GeoLatinaApplicationCore() {
   const {
     user: latinaSession,
+    config: latinaConfig,
     uiConfig,
     auditLogs,
     gpsFraudAlerts,
@@ -164,6 +185,29 @@ function GeoLatinaApplicationCore() {
 
   // Mode override: Allow supervisor/director to preview the mobile agent experience
   const [previewMode, setPreviewMode] = useState<'auto' | 'mobile' | 'dashboard'>('auto');
+
+  // Primary module navigation: 'MAPA_GPS' | 'CLIENTES_ANALISIS_12M' | 'COBRANZAS_CARTERA'
+  const [activePrimaryModule, setActivePrimaryModule] = useState<
+    'MAPA_GPS' | 'CLIENTES_ANALISIS_12M' | 'COBRANZAS_CARTERA'
+  >('MAPA_GPS');
+
+  // ERP/CRM: Filtro Jerárquico en Cascada (Nivel 1: Supervisor/Zona -> Nivel 2: Ejecutivo -> Nivel 3: Cliente)
+  const [cascadeFilter, setCascadeFilter] = useState<CascadeFilterState>({
+    supervisorId: 'ALL',
+    executiveId: 'ALL',
+    clientId: 'ALL',
+  });
+
+  // ERP/CRM: Cartera de Clientes 12M, Facturas por Vencer y Compromisos de Potencialización (con caché en localStorage)
+  const [clientPortfolio] = useState<ClientPortfolioRecord[]>(() =>
+    loadClientPortfolioFromCache()
+  );
+  const [receivableInvoices, setReceivableInvoices] = useState<ReceivableInvoiceRecord[]>(() =>
+    loadReceivableInvoicesFromCache()
+  );
+  const [committedOpportunities, setCommittedOpportunities] = useState<Record<string, string>>(() =>
+    loadCommittedOpportunitiesFromCache()
+  );
 
   // Real GPS watchPosition ref
   const watchIdRef = useRef<number | null>(null);
@@ -767,6 +811,150 @@ function GeoLatinaApplicationCore() {
 
   const allAgentsList = Object.values(agents);
 
+  // Resolver el Filtro Jerárquico en Cascada según el rol autenticado
+  const effectiveCascade = resolveEffectiveCascadeFilter(latinaSession, cascadeFilter);
+
+  // Cartera de clientes disponible para el selector Nivel 3 (filtrada por Supervisor + Ejecutivo)
+  const cascadeAvailableClients = filterPortfolioByCascade(clientPortfolio, {
+    effectiveSupervisorId: effectiveCascade.effectiveSupervisorId,
+    effectiveExecutiveId: effectiveCascade.effectiveExecutiveId,
+    effectiveClientId: 'ALL',
+  });
+
+  // Cartera de clientes y facturas filtradas por los 3 niveles de la cascada
+  const cascadeFilteredClients = filterPortfolioByCascade(clientPortfolio, {
+    effectiveSupervisorId: effectiveCascade.effectiveSupervisorId,
+    effectiveExecutiveId: effectiveCascade.effectiveExecutiveId,
+    effectiveClientId: effectiveCascade.effectiveClientId,
+  });
+
+  const cascadeFilteredInvoices = filterInvoicesByCascade(receivableInvoices, {
+    effectiveSupervisorId: effectiveCascade.effectiveSupervisorId,
+    effectiveExecutiveId: effectiveCascade.effectiveExecutiveId,
+    effectiveClientId: effectiveCascade.effectiveClientId,
+  });
+
+  // Filtrar la lista de ejecutivos en el mapa según la cascada activa (sin dejar vacía la lista)
+  const allowedExecIds = new Set(effectiveCascade.availableExecutives.map((e) => e.id));
+  const cascadeAgentsList = allAgentsList.filter((ag) => {
+    if (effectiveCascade.effectiveExecutiveId !== 'ALL') {
+      return ag.user.id === effectiveCascade.effectiveExecutiveId;
+    }
+    return allowedExecIds.has(ag.user.id);
+  });
+  const effectiveAgentsForMap = cascadeAgentsList.length > 0 ? cascadeAgentsList : allAgentsList;
+
+  const handleCascadeChange = (next: CascadeFilterState) => {
+    setCascadeFilter(next);
+    if (next.executiveId !== 'ALL' && agents[next.executiveId]) {
+      setSelectedAgentId(next.executiveId);
+    }
+  };
+
+  // Agendar compromiso de potencialización (Latina / Induless) en visita y bitácora diaria
+  const handleScheduleOpportunityCommitment = (
+    client: ClientPortfolioRecord,
+    opportunity: ProductOpportunityRecommendation
+  ) => {
+    const nowTime = new Date().toLocaleTimeString('es-EC', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    setCommittedOpportunities((prev) => {
+      const updated = { ...prev, [opportunity.id]: `Hoy ${nowTime}` };
+      saveCommittedOpportunitiesToCache(updated);
+      return updated;
+    });
+
+    recordAuditAction({
+      eventType: 'VISITA_CLIENTE',
+      alertState: 'NORMAL',
+      lat: client.lat,
+      lng: client.lng,
+      detail: `[POTENCIALIZACIÓN ${opportunity.brand}] Compromiso agendado en visita/proforma para "${client.razonSocial}" (RUC: ${client.ruc}): ${opportunity.sku} ${opportunity.productName} — Meta: ${opportunity.suggestedGoalQty} ${opportunity.unitLabel} (+$${opportunity.estimatedMonthlyExtraUsd.toLocaleString('en-US')}/mes).`,
+    });
+
+    syncCommercialEventToLatinaWebApi(
+      latinaConfig.productOpportunitiesEndpoint,
+      {
+        clientId: client.id,
+        clientRuc: client.ruc,
+        opportunityId: opportunity.id,
+        sku: opportunity.sku,
+        brand: opportunity.brand,
+        category: opportunity.category,
+        suggestedGoalQty: opportunity.suggestedGoalQty,
+        estimatedMonthlyExtraUsd: opportunity.estimatedMonthlyExtraUsd,
+        committedBy: currentUser.name,
+        timestamp: new Date().toISOString(),
+      },
+      latinaConfig,
+      latinaSession
+    );
+  };
+
+  // Registrar seguimiento de cobro de factura en cartera, bitácora y LatinaWebApi
+  const handleRegisterInvoiceFollowUp = (params: {
+    invoiceId: string;
+    status: CollectionManagementStatus;
+    promiseDate: string;
+    reminderTime: string;
+    receiptNumber: string;
+    committedOrPaidAmountUsd: number;
+    notes: string;
+  }) => {
+    const { updatedInvoices, createdFollowUp, targetInvoice } = applyInvoiceFollowUpToCollection(
+      receivableInvoices,
+      {
+        ...params,
+        registeredBy: currentUser.name,
+        registeredRole: latinaSession?.rol || currentUser.role,
+      }
+    );
+
+    setReceivableInvoices(updatedInvoices);
+    saveReceivableInvoicesToCache(updatedInvoices);
+
+    if (targetInvoice) {
+      recordAuditAction({
+        eventType: 'CONSULTA_CLIENTE',
+        alertState: 'NORMAL',
+        detail: `[GESTIÓN DE COBRO - ${targetInvoice.invoiceNumber}] Cliente "${targetInvoice.clientName}" -> Estado: ${createdFollowUp.status} | Compromiso/Abono: $${createdFollowUp.committedOrPaidAmountUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })} | Promesa: ${createdFollowUp.promiseDate} (${createdFollowUp.reminderTime}) | Comp: ${createdFollowUp.receiptNumber}.`,
+      });
+
+      syncCommercialEventToLatinaWebApi(
+        latinaConfig.invoicesCollectionsEndpoint,
+        {
+          invoiceNumber: targetInvoice.invoiceNumber,
+          clientRuc: targetInvoice.clientRuc,
+          followUp: createdFollowUp,
+          pendingBalanceUsd: targetInvoice.pendingBalanceUsd,
+        },
+        latinaConfig,
+        latinaSession
+      );
+    }
+  };
+
+  // Navegar directamente desde la tarjeta de un cliente a Google Maps / Iniciar Visita
+  const handleNavigateToClientOnMap = (client: ClientPortfolioRecord) => {
+    if (agents[client.executiveId]) {
+      setSelectedAgentId(client.executiveId);
+    }
+    setActivePrimaryModule('MAPA_GPS');
+    setPreviewMode('dashboard');
+    handleRecordGPSPoint(
+      agents[client.executiveId] ? client.executiveId : selectedAgentId,
+      client.lat,
+      client.lng,
+      0,
+      4.0,
+      `${client.razonSocial} — ${client.sector}`
+    );
+    setShowProductionVisitModal(true);
+  };
+
   // Módulo 1: Login Gate Corporativo — si no existe sesión válida en geolatina_user_session, mostrar pantalla de inicio de sesión
   if (!latinaSession) {
     return <CorporateLoginGate />;
@@ -825,6 +1013,7 @@ function GeoLatinaApplicationCore() {
               <button
                 onClick={() => {
                   setSelectedAgentId(latestToastAlert.agentId);
+                  setActivePrimaryModule('MAPA_GPS');
                   setShowAlertsDrawer(true);
                 }}
                 className="px-2.5 py-1 bg-white text-slate-950 font-bold text-xs rounded-lg shadow hover:bg-slate-100 transition-colors"
@@ -842,8 +1031,8 @@ function GeoLatinaApplicationCore() {
         </div>
       )}
 
-      {/* Sub-header Mode Toggle Bar for Production Operations */}
-      <div className="w-full bg-slate-950/80 border-b border-slate-800/80 px-3 sm:px-4 py-2 shrink-0">
+      {/* Sub-header Mode & Primary ERP/CRM Module Switcher Bar */}
+      <div className="w-full bg-slate-950/90 border-b border-slate-800/80 px-3 sm:px-4 py-2 shrink-0">
         <div className="w-full max-w-full flex flex-wrap items-center justify-between text-xs gap-2">
           <div className="flex flex-wrap items-center gap-2 text-slate-400">
             <span>Sesión activa: <strong className="text-amber-400">{currentUser.name}</strong> (<code className="text-slate-200">{latinaSession.usuario}</code>)</span>
@@ -869,13 +1058,65 @@ function GeoLatinaApplicationCore() {
             </span>
           </div>
 
+          {/* Navegación Principal de Módulos ERP/CRM + Controles de Vista */}
           <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="tablist"
+              aria-label="Módulos Principales GEOLATINA ERP/CRM"
+              className="flex flex-wrap items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700/80 gap-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activePrimaryModule === 'MAPA_GPS'}
+                onClick={() => setActivePrimaryModule('MAPA_GPS')}
+                className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activePrimaryModule === 'MAPA_GPS'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <MapIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>🗺️ Mapa y Control Satelital</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activePrimaryModule === 'CLIENTES_ANALISIS_12M'}
+                onClick={() => setActivePrimaryModule('CLIENTES_ANALISIS_12M')}
+                className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activePrimaryModule === 'CLIENTES_ANALISIS_12M'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 shrink-0" />
+                <span>👥 Mis Clientes y Análisis Comercial</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activePrimaryModule === 'COBRANZAS_CARTERA'}
+                onClick={() => setActivePrimaryModule('COBRANZAS_CARTERA')}
+                className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activePrimaryModule === 'COBRANZAS_CARTERA'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                <span>💳 Facturas por Vencer y Seguimiento de Cobros</span>
+              </button>
+            </div>
+
             <button
               onClick={() => setShowProductionVisitModal(true)}
               className="px-2.5 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>➕ Registrar / Cerrar Visita en Ubicación Actual</span>
+              <span>➕ Registrar / Cerrar Visita</span>
             </button>
             <button
               onClick={() => setNativePdfMode('ACTIVIDADES_EJECUTIVO')}
@@ -883,40 +1124,63 @@ function GeoLatinaApplicationCore() {
             >
               📄 Vista Previa PDF A4
             </button>
-            <span className="text-slate-500 text-[11px] font-semibold hidden md:inline">
-              Vista operativa:
-            </span>
             <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800">
               <button
-                onClick={() => setPreviewMode('dashboard')}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all ${
-                  shouldShowDashboard
-                    ? 'bg-amber-500 text-slate-950 shadow'
+                onClick={() => {
+                  setActivePrimaryModule('MAPA_GPS');
+                  setPreviewMode('dashboard');
+                }}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  activePrimaryModule === 'MAPA_GPS' && shouldShowDashboard
+                    ? 'bg-sky-500 text-slate-950 shadow'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Monitor className="w-3.5 h-3.5" />
-                <span>Panel Central (Admin/Supervisor)</span>
+                <span>Panel Central</span>
               </button>
               <button
-                onClick={() => setPreviewMode('mobile')}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all ${
-                  !shouldShowDashboard
-                    ? 'bg-amber-500 text-slate-950 shadow'
+                onClick={() => {
+                  setActivePrimaryModule('MAPA_GPS');
+                  setPreviewMode('mobile');
+                }}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  activePrimaryModule === 'MAPA_GPS' && !shouldShowDashboard
+                    ? 'bg-sky-500 text-slate-950 shadow'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>Móvil Agente / Transportista</span>
+                <span>Móvil Agente</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Módulo 1 ERP/CRM: Barra Superior de Filtro Jerárquico en Cascada (Roll-Up & Drill-Down) */}
+      <HierarchyCascadeBar
+        roleName={latinaSession.rol}
+        hierarchyLevel={effectiveCascade.hierarchyLevel}
+        canSelectSupervisor={effectiveCascade.canSelectSupervisor}
+        canSelectExecutive={effectiveCascade.canSelectExecutive}
+        availableSupervisors={effectiveCascade.availableSupervisors}
+        availableExecutives={effectiveCascade.availableExecutives}
+        availableClients={cascadeAvailableClients}
+        effectiveSupervisorId={effectiveCascade.effectiveSupervisorId}
+        effectiveExecutiveId={effectiveCascade.effectiveExecutiveId}
+        effectiveClientId={effectiveCascade.effectiveClientId}
+        filteredClients={cascadeFilteredClients}
+        filteredInvoices={cascadeFilteredInvoices}
+        onChangeCascade={handleCascadeChange}
+        onResetCascade={() =>
+          setCascadeFilter({ supervisorId: 'ALL', executiveId: 'ALL', clientId: 'ALL' })
+        }
+      />
+
       {/* Main View Display (Responsive Layout supporting TOP_BAR, LEFT_SIDEBAR, RIGHT_SIDEBAR) */}
       <div
-        className={`flex-1 w-full max-w-full min-h-[calc(100dvh-118px)] flex ${
+        className={`flex-1 w-full max-w-full min-h-[calc(100dvh-168px)] flex ${
           uiConfig.navPosition === 'LEFT_SIDEBAR'
             ? 'flex-col lg:flex-row'
             : uiConfig.navPosition === 'RIGHT_SIDEBAR'
@@ -931,13 +1195,31 @@ function GeoLatinaApplicationCore() {
             </div>
             <div className="space-y-1.5 text-xs">
               <button
-                onClick={() => setPreviewMode('dashboard')}
+                onClick={() => {
+                  setActivePrimaryModule('MAPA_GPS');
+                  setPreviewMode('dashboard');
+                }}
                 className="w-full text-left px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold border border-slate-800"
               >
                 🖥️ Panel Central de Control
               </button>
               <button
-                onClick={() => setPreviewMode('mobile')}
+                onClick={() => setActivePrimaryModule('CLIENTES_ANALISIS_12M')}
+                className="w-full text-left px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-300 font-semibold border border-slate-800"
+              >
+                👥 Mis Clientes y Análisis Comercial (12M)
+              </button>
+              <button
+                onClick={() => setActivePrimaryModule('COBRANZAS_CARTERA')}
+                className="w-full text-left px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-300 font-semibold border border-slate-800"
+              >
+                💳 Facturas por Vencer y Cobranzas
+              </button>
+              <button
+                onClick={() => {
+                  setActivePrimaryModule('MAPA_GPS');
+                  setPreviewMode('mobile');
+                }}
                 className="w-full text-left px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold border border-slate-800"
               >
                 📱 Rutero Móvil Ejecutivo
@@ -952,11 +1234,30 @@ function GeoLatinaApplicationCore() {
           </aside>
         )}
 
-        <main className="flex-1 w-full max-w-full min-h-[calc(100dvh-118px)] flex flex-col min-w-0 p-0 m-0">
-          {shouldShowDashboard ? (
+        <main className="flex-1 w-full max-w-full min-h-[calc(100dvh-168px)] flex flex-col min-w-0 p-0 m-0">
+          {activePrimaryModule === 'CLIENTES_ANALISIS_12M' ? (
+            <CommercialPortfolioAnalysisView
+              clients={cascadeFilteredClients}
+              selectedClientId={effectiveCascade.effectiveClientId}
+              onSelectClient={(clientId) =>
+                setCascadeFilter((prev) => ({ ...prev, clientId }))
+              }
+              committedOpportunities={committedOpportunities}
+              onScheduleOpportunityCommitment={handleScheduleOpportunityCommitment}
+              onNavigateToClientOnMap={handleNavigateToClientOnMap}
+            />
+          ) : activePrimaryModule === 'COBRANZAS_CARTERA' ? (
+            <ReceivablesCollectionsView
+              invoices={cascadeFilteredInvoices}
+              scopeLabel={`${latinaSession.rol} — ${currentUser.name}`}
+              currentUserName={currentUser.name}
+              currentUserRole={latinaSession.rol}
+              onRegisterInvoiceFollowUp={handleRegisterInvoiceFollowUp}
+            />
+          ) : shouldShowDashboard ? (
             <AdminSupervisorDashboard
               currentUser={currentUser}
-              agents={allAgentsList}
+              agents={effectiveAgentsForMap}
               selectedAgentId={selectedAgentId}
               onSelectAgent={(id) => {
                 setSelectedAgentId(id);

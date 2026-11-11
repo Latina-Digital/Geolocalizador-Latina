@@ -16,10 +16,21 @@ import {
 import { getRoleHierarchyLevel } from './latinaApiEngine';
 import {
   buildDirectionsRequestsForChunks,
+  buildInteractiveTrajectoryCheckpoints,
   chunkRouteWaypoints,
   classifyVisitMarkerCategory,
+  extractDetailedStepsPathFromGoogleRoute,
+  filterAgentsBySupervisorForHud,
+  resolveExecutiveVitalTelemetry,
+  traceStreetNetworkPathBetweenPoints,
 } from '../utils/googleMapsRouting';
-import { CARLOS_VISITS } from '../data/mockData';
+import {
+  calculateBearingDegrees,
+  computeTrajectoryVitalMetrics,
+  evaluateUnregisteredStopAtPoint,
+  shouldRecordTrajectoryStep,
+} from './liveTrajectoryTracker';
+import { CARLOS_VISITS, INITIAL_AGENTS_STATE } from '../data/mockData';
 
 test('GeoIntegrityGuard Heuristic #1 detects impossible teleportation speed (>130 km/h)', () => {
   const now = Date.now();
@@ -105,12 +116,13 @@ test('GeoAuditLogger filters entries and exports UTF-8 BOM CSV', () => {
     usuario: 'cvera',
     nombreUsuario: 'Carlos Vera',
     rol: 'EJECUTIVO_VENTAS',
+    rolRaw: 'EJECUTIVO_VENTAS',
     sucursal: 'Norte',
     eventType: 'ALERTA_FRAUDE_GPS',
     alertState: 'CRITICA',
     detail: 'Mock location detectado',
     now,
-  });
+  } as any);
 
   const criticalOnly = filterAuditLogs(
     [e1, e2],
@@ -174,4 +186,115 @@ test('buildDirectionsRequestsForChunks builds sequential DirectionsRequest specs
   assert.deepEqual(reqs[2].origin, reqs[1].destination);
   assert.equal(reqs[2].waypoints.length, 2);
 });
+
+test('HUD de Control Vital en Vivo filters executives by supervisor and recognizes battery % and online/offline state', () => {
+  const allAgentsList = Object.values(INITIAL_AGENTS_STATE);
+  const norteAgents = filterAgentsBySupervisorForHud(allAgentsList, 'usr-sup-norte');
+  assert.equal(norteAgents.length, 3);
+  assert.deepEqual(
+    norteAgents.map((a) => a.user.id),
+    ['agt-1', 'agt-2', 'agt-3']
+  );
+
+  const surAgents = filterAgentsBySupervisorForHud(allAgentsList, 'usr-sup-sur');
+  assert.equal(surAgents.length, 1);
+  assert.equal(surAgents[0].user.id, 'trans-1');
+
+  // Carlos Vera (agt-1): 84% battery, en_cliente -> En Línea
+  const carlosVital = resolveExecutiveVitalTelemetry(norteAgents[0], null, true);
+  assert.equal(carlosVital.batteryPercent, 84);
+  assert.equal(carlosVital.batterySeverity, 'HIGH');
+  assert.equal(carlosVital.isOnline, true);
+  assert.equal(carlosVital.statusLabel, 'En Línea');
+
+  // Javier Solís (agt-3): 95% battery, inactivo (Hace 1 hora) -> Fuera de Línea
+  const javierVital = resolveExecutiveVitalTelemetry(norteAgents[2], null, true);
+  assert.equal(javierVital.batteryPercent, 95);
+  assert.equal(javierVital.isOnline, false);
+  assert.equal(javierVital.statusLabel, 'Fuera de Línea');
+
+  // Hardware battery override (e.g. 15% charging)
+  const lowBatteryOverride = resolveExecutiveVitalTelemetry(
+    norteAgents[0],
+    { levelPercent: 15, isCharging: true },
+    true
+  );
+  assert.equal(lowBatteryOverride.batteryPercent, 15);
+  assert.equal(lowBatteryOverride.isCharging, true);
+  assert.equal(lowBatteryOverride.batterySeverity, 'LOW');
+});
+
+test('LiveTrajectoryTracker applies 8-meter minimum step filter and detects unregistered stops >5 min', () => {
+  const prev = { lat: -2.155, lng: -79.905 };
+  // ~2.2 meters difference -> ignored as stationary GPS noise
+  const tinyMove = shouldRecordTrajectoryStep(prev, -2.15501, -79.90501, 8);
+  assert.equal(tinyMove.shouldRecord, false);
+
+  // ~35 meters difference -> recorded as real trajectory step
+  const realMove = shouldRecordTrajectoryStep(prev, -2.1553, -79.9052, 8);
+  assert.equal(realMove.shouldRecord, true);
+  assert.ok(realMove.distanceMeters >= 8);
+
+  const bearing = calculateBearingDegrees(-2.155, -79.905, -2.165, -79.905);
+  assert.equal(bearing, 180);
+
+  // Unregistered stop >5 min away from any registered visit
+  const unregStop = evaluateUnregisteredStopAtPoint(-2.171, -79.9, 14, CARLOS_VISITS);
+  assert.equal(unregStop.isUnregisteredStop, true);
+  assert.equal(unregStop.stoppedMinutes, 14);
+
+  // Stop at a registered completed visit (vis-1 at -2.1550, -79.9050) is NOT an unregistered stop
+  const visitStop = evaluateUnregisteredStopAtPoint(-2.155, -79.905, 40, CARLOS_VISITS);
+  assert.equal(visitStop.isUnregisteredStop, false);
+});
+
+test('Street-and-curve router traces multi-step avenue geometry without straight lines and extracts steps[].path', () => {
+  // Trace from Base Matriz (Av. Juan Tanca Marengo) to Miraflores (Av. Carlos Julio Arosemena)
+  const streetSteps = traceStreetNetworkPathBetweenPoints(
+    { lat: -2.148, lng: -79.901 },
+    { lat: -2.181, lng: -79.913 }
+  );
+  // Must contain many intermediate street/avenue curve vertices, never a 2-point straight line
+  assert.ok(streetSteps.length >= 10);
+  assert.ok(streetSteps.some((s) => (s.streetName || '').includes('Francisco de Orellana')));
+  assert.ok(streetSteps.some((s) => (s.streetName || '').includes('Carlos Julio Arosemena')));
+
+  // Verify detailed steps[].path extraction from a Google Route object
+  const mockGoogleRoute = {
+    legs: [
+      {
+        steps: [
+          {
+            path: [
+              { lat: -2.148, lng: -79.901 },
+              { lat: -2.151, lng: -79.903 },
+            ],
+          },
+          {
+            path: [
+              { lat: -2.151, lng: -79.903 },
+              { lat: -2.155, lng: -79.905 },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const extracted = extractDetailedStepsPathFromGoogleRoute(mockGoogleRoute);
+  assert.equal(extracted.length, 3);
+
+  // Verify interactive checkpoints generation along the street trajectory
+  const carlosAgent = INITIAL_AGENTS_STATE['agt-1'];
+  const checkpoints = buildInteractiveTrajectoryCheckpoints(carlosAgent, streetSteps, []);
+  assert.ok(checkpoints.length >= 4);
+  assert.equal(checkpoints[0].userName, 'Carlos Vera');
+  assert.match(checkpoints[0].timestamp, /^\d{2}:\d{2}:\d{2}$/);
+  assert.ok(checkpoints.some((c) => c.isUnregisteredStop && (c.stoppedMinutes || 0) > 5));
+
+  const vitalMetrics = computeTrajectoryVitalMetrics(checkpoints, streetSteps);
+  assert.ok(vitalMetrics.totalDistanceKm > 3);
+  assert.ok(vitalMetrics.movingMinutes > 0);
+});
+
+
 
