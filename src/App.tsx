@@ -38,9 +38,11 @@ import { AuditHistoryModal } from './components/AuditHistoryModal';
 import { GpsAntiFraudModal } from './components/GpsAntiFraudModal';
 import { AdminUiBuilderModal } from './components/AdminUiBuilderModal';
 import { NativePdfReportModal, NativeReportMode } from './components/NativePdfReportModal';
+import { ProductionVisitRegistrationModal } from './components/ProductionVisitRegistrationModal';
 import { GeoLatinaSystemProvider, useGeoLatinaSystem } from './context/GeoLatinaSystemContext';
+import { canUserAccessTicConfig } from './services/latinaApiEngine';
 import { CustomGeofence } from './types';
-import { ShieldAlert, Smartphone, Monitor } from 'lucide-react';
+import { ShieldAlert, Smartphone, Monitor, Plus, Settings } from 'lucide-react';
 
 export default function App() {
   return (
@@ -63,7 +65,16 @@ function GeoLatinaApplicationCore() {
     recordAuditAction,
     evaluateAndRecordGpsSample,
     switchActiveCorporateRole,
+    openSysConfigModal,
   } = useGeoLatinaSystem();
+
+  // Google Maps Platform Demo Key Quota Exceeded state
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  useEffect(() => {
+    const handler = () => setQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', handler);
+    return () => window.removeEventListener('gmp-quota-exceeded', handler);
+  }, []);
 
   // Current user state (Default to Director General for full power, with easy 1-click switch)
   const [currentUser, setCurrentUser] = useState<User>(() => {
@@ -74,7 +85,7 @@ function GeoLatinaApplicationCore() {
     return INITIAL_USERS[0]; // Director General
   });
 
-  // Sync authenticated LatinaSoft corporate session with GEOLATINA user profile when logging in
+  // Sync authenticated Syspro corporate session with GEOLATINA user profile when logging in
   useEffect(() => {
     if (!latinaSession) return;
     const matchedUser = INITIAL_USERS.find(u => u.id === latinaSession.mappedGeoLatinaUserId);
@@ -82,12 +93,27 @@ function GeoLatinaApplicationCore() {
       setCurrentUser({
         ...matchedUser,
         name: latinaSession.nombreCompleto || matchedUser.name,
+        role: latinaSession.mappedGeoLatinaRole || matchedUser.role,
+        zone: latinaSession.sucursal || matchedUser.zone,
       });
       if (matchedUser.role === 'EJECUTIVO_VENTAS' || matchedUser.role === 'TRANSPORTISTA') {
         setSelectedAgentId(matchedUser.id);
       }
+    } else {
+      setCurrentUser({
+        id: latinaSession.mappedGeoLatinaUserId || `usr-${latinaSession.usuario.toLowerCase()}`,
+        name: latinaSession.nombreCompleto || latinaSession.usuario,
+        email: `${latinaSession.usuario.toLowerCase()}@industriallatina.com`,
+        role: latinaSession.mappedGeoLatinaRole || 'DIRECTOR_GENERAL',
+        phone: '+593 99 412 8890',
+        zone: latinaSession.sucursal || 'Matriz Guayaquil',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
+      });
+      if (latinaSession.mappedGeoLatinaRole === 'EJECUTIVO_VENTAS' || latinaSession.mappedGeoLatinaRole === 'TRANSPORTISTA') {
+        setSelectedAgentId('agt-1');
+      }
     }
-  }, [latinaSession?.timestamp]);
+  }, [latinaSession?.timestamp, latinaSession?.rol]);
 
   // Custom Geofences state
   const [customGeofences, setCustomGeofences] = useState<CustomGeofence[]>(() => {
@@ -102,7 +128,14 @@ function GeoLatinaApplicationCore() {
   const [agents, setAgents] = useState<Record<string, AgentRealTimeState>>(() => {
     const saved = localStorage.getItem('geo_latina_agents');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+      try {
+        const parsed = JSON.parse(saved);
+        // Ensure enriched CARLOS_VISITS fields are present
+        if (parsed['agt-1'] && (!parsed['agt-1'].visits?.[0]?.clientRuc)) {
+          return INITIAL_AGENTS_STATE;
+        }
+        return parsed;
+      } catch (e) { /* ignore */ }
     }
     return INITIAL_AGENTS_STATE;
   });
@@ -127,6 +160,7 @@ function GeoLatinaApplicationCore() {
   const [showReportsModal, setShowReportsModal] = useState<boolean>(false);
   const [showAlertsDrawer, setShowAlertsDrawer] = useState<boolean>(false);
   const [nativePdfMode, setNativePdfMode] = useState<NativeReportMode | null>(null);
+  const [showProductionVisitModal, setShowProductionVisitModal] = useState<boolean>(false);
 
   // Mode override: Allow supervisor/director to preview the mobile agent experience
   const [previewMode, setPreviewMode] = useState<'auto' | 'mobile' | 'dashboard'>('auto');
@@ -692,6 +726,37 @@ function GeoLatinaApplicationCore() {
     });
   };
 
+  // Production Visit Registration handler (creates or closes a real field visit with GPS & Reverse Geocoding)
+  const handleRegisterVisitInField = (visitRecord: ClientVisit, isNewVisit: boolean) => {
+    const targetAgentId = isSupervisorRole ? selectedAgentId : currentUser.id;
+    handleRecordGPSPoint(
+      targetAgentId,
+      visitRecord.lat,
+      visitRecord.lng,
+      visitRecord.arrivalSpeedKmh || 0,
+      visitRecord.gpsAccuracyMeters || 4.2,
+      visitRecord.reverseGeocodedAddress || visitRecord.address
+    );
+
+    setAgents((prev) => {
+      const target = prev[targetAgentId];
+      if (!target) return prev;
+
+      const updatedVisits = isNewVisit
+        ? [...target.visits, visitRecord]
+        : target.visits.map((v) => (v.id === visitRecord.id ? visitRecord : v));
+
+      return {
+        ...prev,
+        [targetAgentId]: {
+          ...target,
+          currentLocation: { lat: visitRecord.lat, lng: visitRecord.lng },
+          visits: updatedVisits,
+        },
+      };
+    });
+  };
+
   // Determine which UI to show:
   const isSupervisorRole = currentUser.role === 'DIRECTOR_GENERAL' || currentUser.role === 'SUPERVISOR_REGIONAL';
   const shouldShowDashboard = previewMode === 'dashboard' || (previewMode === 'auto' && isSupervisorRole);
@@ -708,7 +773,26 @@ function GeoLatinaApplicationCore() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--geo-bg-primary,#070d1e)] text-[var(--geo-text-primary,#f8fafc)] flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
+    <div id="app" className="w-screen max-w-full min-h-[100dvh] bg-[var(--geo-bg-primary,#070d1e)] text-[var(--geo-text-primary,#f8fafc)] flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden m-0 p-0">
+      {/* Google Maps Platform Demo Key Quota Exceeded Banner */}
+      {quotaExceeded && (
+        <div role="alert" className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-amber-50 border-b border-amber-300 px-4 py-2.5 text-sm text-amber-900 w-full">
+          <span>
+            Google Maps quota reached — map features are paused. To keep using Maps,{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium underline"
+            >
+              link your Google Cloud project
+            </a>
+            .
+          </span>
+          <button onClick={() => setQuotaExceeded(false)} aria-label="Dismiss" className="text-amber-700 hover:text-amber-900">✕</button>
+        </div>
+      )}
+
       {/* Módulo 7: Barra Superior Corporativa de Sesión Activa (GEOLATINA | LatinaSoft Conectado) */}
       <CorporateSessionBar />
 
@@ -724,8 +808,8 @@ function GeoLatinaApplicationCore() {
 
       {/* Real-time Push Alert Banner (immediate notification) */}
       {latestToastAlert && !latestToastAlert.resolved && (
-        <div className="bg-gradient-to-r from-red-600 via-rose-700 to-red-800 text-white px-4 py-2.5 shadow-2xl flex items-center justify-between z-40 animate-in slide-in-from-top duration-300">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-3 w-full">
+        <div className="w-full bg-gradient-to-r from-red-600 via-rose-700 to-red-800 text-white px-4 py-2.5 shadow-2xl flex items-center justify-between z-40 animate-in slide-in-from-top duration-300">
+          <div className="w-full max-w-full flex flex-wrap items-center gap-3">
             <span className="p-1 bg-white/20 rounded-full animate-ping shrink-0">
               <ShieldAlert className="w-5 h-5 text-white" />
             </span>
@@ -758,13 +842,27 @@ function GeoLatinaApplicationCore() {
         </div>
       )}
 
-      {/* Sub-header Mode Toggle Bar for Testing and Switching Perspectives */}
-      <div className="bg-slate-950/80 border-b border-slate-800/80 px-4 py-2">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between text-xs gap-2">
+      {/* Sub-header Mode Toggle Bar for Production Operations */}
+      <div className="w-full bg-slate-950/80 border-b border-slate-800/80 px-3 sm:px-4 py-2 shrink-0">
+        <div className="w-full max-w-full flex flex-wrap items-center justify-between text-xs gap-2">
           <div className="flex flex-wrap items-center gap-2 text-slate-400">
-            <span>Sesión activa: <strong className="text-amber-400">{currentUser.name}</strong></span>
+            <span>Sesión activa: <strong className="text-amber-400">{currentUser.name}</strong> (<code className="text-slate-200">{latinaSession.usuario}</code>)</span>
             <span className="text-slate-600">|</span>
             <span>Perfil: <strong className="text-slate-200">{latinaSession.rol}</strong> ({currentUser.role})</span>
+            {canUserAccessTicConfig(latinaSession) && (
+              <>
+                <span className="text-slate-600">|</span>
+                <button
+                  type="button"
+                  onClick={openSysConfigModal}
+                  className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Configuraciones de Conexiones — Área de TIC (Exclusivo Perfil ADMIN y Usuario XBRIONES)"
+                >
+                  <Settings className="w-3 h-3 text-amber-400" />
+                  <span>Conexiones TIC</span>
+                </button>
+              </>
+            )}
             <span className="text-slate-600 hidden md:inline">|</span>
             <span className="hidden md:inline text-emerald-400 font-semibold">
               Bitácora Hoy: {auditLogs.length} eventos
@@ -773,8 +871,15 @@ function GeoLatinaApplicationCore() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={() => setShowProductionVisitModal(true)}
+              className="px-2.5 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>➕ Registrar / Cerrar Visita en Ubicación Actual</span>
+            </button>
+            <button
               onClick={() => setNativePdfMode('ACTIVIDADES_EJECUTIVO')}
-              className="px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-colors"
+              className="px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-colors cursor-pointer"
             >
               📄 Vista Previa PDF A4
             </button>
@@ -811,7 +916,7 @@ function GeoLatinaApplicationCore() {
 
       {/* Main View Display (Responsive Layout supporting TOP_BAR, LEFT_SIDEBAR, RIGHT_SIDEBAR) */}
       <div
-        className={`flex-1 flex ${
+        className={`flex-1 w-full max-w-full min-h-[calc(100dvh-118px)] flex ${
           uiConfig.navPosition === 'LEFT_SIDEBAR'
             ? 'flex-col lg:flex-row'
             : uiConfig.navPosition === 'RIGHT_SIDEBAR'
@@ -847,7 +952,7 @@ function GeoLatinaApplicationCore() {
           </aside>
         )}
 
-        <main className="flex-1 pb-10 min-w-0">
+        <main className="flex-1 w-full max-w-full min-h-[calc(100dvh-118px)] flex flex-col min-w-0 p-0 m-0">
           {shouldShowDashboard ? (
             <AdminSupervisorDashboard
               currentUser={currentUser}
@@ -868,7 +973,7 @@ function GeoLatinaApplicationCore() {
               alerts={alerts}
               onResolveAlert={handleResolveAlert}
               onExportPDF={handleExportPDF}
-              onSimulateMovement={handleSimulateMovement}
+              onOpenRegisterVisitModal={() => setShowProductionVisitModal(true)}
               onAddNewAlert={(a) => {
                 setAlerts(cur => [a, ...cur]);
                 setLatestToastAlert(a);
@@ -878,8 +983,6 @@ function GeoLatinaApplicationCore() {
               onDeleteGeofence={handleDeleteGeofence}
               onToggleGeofenceActive={handleToggleGeofenceActive}
               onAssignGeofenceToAgent={handleAssignGeofenceToAgent}
-              onSimulateGeofenceBreach={handleSimulateGeofenceBreach}
-              onSimulate9HourLimit={handleSimulate9HourLimit}
             />
           ) : (
             <AgentMobileView
@@ -890,8 +993,7 @@ function GeoLatinaApplicationCore() {
               }
               onTriggerSOS={() => handleTriggerSOS(activeAgentForMobile.user.id)}
               onOpenReport={() => setShowReportsModal(true)}
-              onSimulateMovement={() => handleSimulateMovement(activeAgentForMobile.user.id)}
-              onSimulate9HourLimit={() => handleSimulate9HourLimit(activeAgentForMobile.user.id)}
+              onOpenRegisterVisitModal={() => setShowProductionVisitModal(true)}
             />
           )}
         </main>
@@ -972,6 +1074,18 @@ function GeoLatinaApplicationCore() {
         auditLogs={auditLogs}
         fraudAlerts={gpsFraudAlerts}
         onClose={() => setNativePdfMode(null)}
+      />
+
+      {/* Módulo Producción: Registro Real de Visita en Ubicación Actual */}
+      <ProductionVisitRegistrationModal
+        isOpen={showProductionVisitModal}
+        onClose={() => setShowProductionVisitModal(false)}
+        currentLocation={activeAgentForMobile.currentLocation}
+        existingVisits={activeAgentForMobile.visits}
+        executiveId={activeAgentForMobile.user.id}
+        executiveName={activeAgentForMobile.user.name}
+        executiveZone={activeAgentForMobile.user.zone}
+        onRegisterVisitInField={handleRegisterVisitInField}
       />
     </div>
   );

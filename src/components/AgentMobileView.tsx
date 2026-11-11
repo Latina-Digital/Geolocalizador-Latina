@@ -55,8 +55,7 @@ interface AgentMobileViewProps {
   ) => void;
   onTriggerSOS: () => void;
   onOpenReport: () => void;
-  onSimulateMovement: () => void;
-  onSimulate9HourLimit?: () => void;
+  onOpenRegisterVisitModal?: () => void;
 }
 
 export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
@@ -65,8 +64,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
   onUpdateVisitStatus,
   onTriggerSOS,
   onOpenReport,
-  onSimulateMovement,
-  onSimulate9HourLimit,
+  onOpenRegisterVisitModal,
 }) => {
   const { uiConfig } = useGeoLatinaSystem();
   const [activeTab, setActiveTab] = useState<'agenda' | 'mapa' | 'eficiencia'>('agenda');
@@ -187,10 +185,10 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 space-y-4">
+    <div className="geo-workspace-shell w-full max-w-full flex-1 min-h-[calc(100dvh-118px)] flex flex-col">
       {/* Mandatory Shift Start Gate (When Shift is Inactive) */}
       {!isShiftActive && (
-        <div className="bg-gradient-to-br from-amber-950/60 via-slate-900 to-slate-900 border-2 border-amber-500 rounded-3xl p-6 shadow-2xl space-y-4 text-center animate-in zoom-in-95 duration-200">
+        <div className="w-full bg-gradient-to-br from-amber-950/60 via-slate-900 to-slate-900 border-2 border-amber-500 rounded-3xl p-6 shadow-2xl space-y-4 text-center animate-in zoom-in-95 duration-200">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto shadow-lg">
             <Timer className="w-8 h-8 animate-pulse text-amber-400" />
           </div>
@@ -202,19 +200,19 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
             <h2 className="text-xl sm:text-2xl font-black text-white mt-2">
               Obligación de Inicio de Jornada Laboral
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto mt-1.5 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-300 w-full mt-1.5 leading-relaxed">
               Para habilitar su rutero de clientes del día, activar la telemetría satelital en tiempo real y registrar ventas o cobranzas, debe iniciar formalmente su jornada.
             </p>
           </div>
 
           {currentStatus === 'cerrado_auto_9h' && (
-            <div className="bg-red-950/80 border border-red-700/80 p-3 rounded-xl max-w-md mx-auto text-xs text-red-200 flex items-center gap-2">
+            <div className="bg-red-950/80 border border-red-700/80 p-3 rounded-xl w-full text-xs text-red-200 flex items-center justify-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
               <span>Su jornada anterior fue <b>cerrada automáticamente</b> tras alcanzar el límite reglamentario de 9 horas continuas.</span>
             </div>
           )}
 
-          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 max-w-md mx-auto text-xs text-slate-400 space-y-1">
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 w-full text-xs text-slate-400 space-y-1">
             <div className="flex items-center justify-between text-slate-300">
               <span>Límite Máximo Diario:</span>
               <strong className="text-amber-400">9 Horas Continuas</strong>
@@ -238,7 +236,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
 
       {/* Top Shift Active Status & 9-Hour Limit Bar */}
       {isShiftActive && (
-        <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-700/80 rounded-2xl p-4 shadow-xl space-y-3">
+        <div className="w-full bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-700/80 rounded-2xl p-4 shadow-xl space-y-3 shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -264,23 +262,13 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
 
             {/* Shift Controls Buttons */}
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={onSimulateMovement}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-semibold border border-slate-700 flex items-center gap-1.5 transition-colors"
-                title="Simular paso o nuevo punto GPS en ruta"
-              >
-                <Navigation className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Avanzar GPS</span>
-              </button>
-
-              {onSimulate9HourLimit && (
+              {onOpenRegisterVisitModal && (
                 <button
-                  onClick={onSimulate9HourLimit}
-                  className="px-2.5 py-2 rounded-xl bg-purple-950 hover:bg-purple-900 text-purple-300 text-xs font-semibold border border-purple-800/80 flex items-center gap-1 transition-colors"
-                  title="Simular que la jornada llega a las 9 horas para verificar el cierre automático"
+                  onClick={onOpenRegisterVisitModal}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1.5 transition-colors shadow-lg cursor-pointer"
                 >
-                  <Timer className="w-3.5 h-3.5 text-purple-400" />
-                  <span className="hidden md:inline">Simular 9h Límite</span>
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>➕ Registrar / Cerrar Visita en Ubicación Actual</span>
                 </button>
               )}
 
@@ -331,26 +319,26 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
             </div>
           </div>
 
-          {/* Telemetry Live HUD Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-800 text-xs">
-            <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          {/* Telemetry Live HUD Bar (Auto-Expanding KPI Grid: 2 cols on mobile, 4 on tablet/desktop) */}
+          <div className="geo-kpi-auto-grid pt-1 border-t border-slate-800 text-xs">
+            <div className="geo-fluid-card bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
               <span className="text-slate-400 text-[11px] block">Velocidad Actual</span>
-              <span className="text-base font-bold text-white font-mono">{Math.round(speed)} km/h</span>
+              <span className="geo-kpi-value font-bold text-white font-mono">{Math.round(speed)} km/h</span>
             </div>
-            <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+            <div className="geo-fluid-card bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
               <span className="text-slate-400 text-[11px] block">Distancia Hoy</span>
-              <span className="text-base font-bold text-amber-400 font-mono">{agentState.todayKm} km</span>
+              <span className="geo-kpi-value font-bold text-amber-400 font-mono">{agentState.todayKm} km</span>
             </div>
-            <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+            <div className="geo-fluid-card bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
               <span className="text-slate-400 text-[11px] block">Batería & Señal GPS</span>
-              <span className="text-base font-bold text-emerald-400 font-mono flex items-center gap-1">
+              <span className="text-base sm:text-lg font-bold text-emerald-400 font-mono flex items-center gap-1">
                 <Battery className="w-3.5 h-3.5" /> {battery}% • {agentState.gpsSignal}
               </span>
             </div>
-            <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+            <div className="geo-fluid-card bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
               <span className="text-slate-400 text-[11px] block">Puntos GPS Guardados</span>
-              <span className="text-base font-bold text-sky-400 font-mono">
-                {routeHistory.length + 1} trazados
+              <span className="geo-kpi-value font-bold text-sky-400 font-mono">
+                {routeHistory.length + 1} pts
               </span>
             </div>
           </div>
@@ -358,7 +346,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
       )}
 
       {/* Mobile Navigation Tabs */}
-      <div className="flex items-center gap-2 p-1 bg-slate-900/90 rounded-xl border border-slate-800">
+      <div className="w-full flex items-center gap-2 p-1 bg-slate-900/90 rounded-xl border border-slate-800 shrink-0">
         <button
           onClick={() => setActiveTab('agenda')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
@@ -390,7 +378,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
 
       {/* Tab 1: Agenda de Visitas con Registro de Actividad y Tachuela */}
       {activeTab === 'agenda' && (
-        <div className="space-y-3">
+        <div className="flex-1 w-full flex flex-col space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
               Ruta Programada del Día
@@ -400,7 +388,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
             </span>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 w-full">
             {visits.map((vis, idx) => {
               const isCompleted = vis.status === 'completada';
               const isInVisit = vis.status === 'en_visita';
@@ -411,7 +399,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
               return (
                 <div
                   key={vis.id}
-                  className={`bg-slate-900 border rounded-2xl p-4 transition-all shadow-md ${
+                  className={`geo-fluid-card bg-slate-900 border rounded-2xl p-4 transition-all shadow-md ${
                     isInVisit
                       ? 'border-amber-500 ring-2 ring-amber-500/40 bg-amber-950/20'
                       : isCompleted
@@ -419,7 +407,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
                       : 'border-slate-800 hover:border-slate-700'
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 h-full">
                     <div className="flex items-start gap-3">
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
                         isCompleted
@@ -487,7 +475,7 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
 
                         {/* Evidence preview badge if attached */}
                         {vis.evidenceUrl && (
-                          <div className="mt-2 flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800 max-w-sm">
+                          <div className="mt-2 flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
                             <img
                               src={vis.evidenceUrl}
                               alt="Evidencia"
@@ -565,37 +553,42 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
         </div>
       )}
 
-      {/* Tab 2: Mapa & Tachuelas */}
+      {/* Tab 2: Mapa & Tachuelas (Full-Viewport Coupled Surface with calc(100dvh - 110px) on Smartphones) */}
       {activeTab === 'mapa' && (
-        <div className="h-[460px] w-full">
-          <MapTracker selectedAgent={agentState} />
+        <div className="geo-map-surface geo-map-surface-mobile-full w-full h-full min-h-[520px] flex-1 relative flex flex-col">
+          <MapTracker
+            selectedAgent={agentState}
+            onOpenRegisterVisitModal={onOpenRegisterVisitModal}
+          />
         </div>
       )}
 
       {/* Tab 3: Eficiencia y Métricas de Ruta */}
       {activeTab === 'eficiencia' && (
-        <div className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-            <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-amber-500" />
-              Tablero de Eficiencia de Ruta - Industrial Latina
-            </h3>
+        <div className="flex-1 w-full flex flex-col">
+          <div className="geo-fluid-card bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex-1">
+            <div>
+              <h3 className="geo-fluid-title font-bold text-white mb-3 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-amber-500" />
+                Tablero de Eficiencia de Ruta - Industrial Latina
+              </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
-                <span className="text-xs text-slate-400">Score de Eficiencia</span>
-                <div className="text-3xl font-black text-amber-400 mt-1">91%</div>
-                <span className="text-[11px] text-emerald-400">Excelente desempeño</span>
-              </div>
-              <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
-                <span className="text-xs text-slate-400">Cumplimiento de Visitas</span>
-                <div className="text-3xl font-black text-sky-400 mt-1">{complianceRate}%</div>
-                <span className="text-[11px] text-slate-400">{completedVisits} de {totalPlannedVisits} programadas</span>
-              </div>
-              <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
-                <span className="text-xs text-slate-400">Kilómetros Recorridos</span>
-                <div className="text-3xl font-black text-emerald-400 mt-1">{agentState.todayKm} km</div>
-                <span className="text-[11px] text-slate-400">Ruta optimizada</span>
+              <div className="geo-kpi-auto-grid">
+                <div className="geo-fluid-card bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400">Score de Eficiencia</span>
+                  <div className="geo-kpi-value font-black text-amber-400 mt-1">91%</div>
+                  <span className="text-[11px] text-emerald-400">Excelente desempeño</span>
+                </div>
+                <div className="geo-fluid-card bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
+                  <span className="text-xs text-slate-400">Cumplimiento de Visitas</span>
+                  <div className="geo-kpi-value font-black text-sky-400 mt-1">{complianceRate}%</div>
+                  <span className="text-[11px] text-slate-400">{completedVisits} de {totalPlannedVisits} programadas</span>
+                </div>
+                <div className="geo-fluid-card bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center col-span-2 md:col-span-1">
+                  <span className="text-xs text-slate-400">Kilómetros Recorridos</span>
+                  <div className="geo-kpi-value font-black text-emerald-400 mt-1">{agentState.todayKm} km</div>
+                  <span className="text-[11px] text-slate-400">Ruta optimizada</span>
+                </div>
               </div>
             </div>
 
@@ -615,10 +608,53 @@ export const AgentMobileView: React.FC<AgentMobileViewProps> = ({
         </div>
       )}
 
+      {/* Barra de Pestañas Inferiores Rápidas para Smartphones (<= 767px) */}
+      <nav
+        aria-label="Pestañas rápidas del ejecutivo en ruta"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-2 py-1.5 grid grid-cols-3 gap-1.5 shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('mapa')}
+          className={`py-2 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === 'mapa'
+              ? 'bg-amber-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-200 border border-slate-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4 shrink-0" />
+          <span className="truncate">Mapa en Vivo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (onOpenRegisterVisitModal) onOpenRegisterVisitModal();
+          }}
+          className="py-2 px-2 rounded-xl text-[11px] font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center gap-1 shadow-md"
+        >
+          <MapPin className="w-4 h-4 shrink-0" />
+          <span className="truncate">Registrar Visita</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('agenda')}
+          className={`py-2 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === 'agenda'
+              ? 'bg-amber-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-200 border border-slate-800'
+          }`}
+        >
+          <Clock className="w-4 h-4 shrink-0" />
+          <span className="truncate">Mis Visitas / Historial</span>
+        </button>
+      </nav>
+
       {/* Modal: Activity Registration (Venta / Cobranza) + Mandatory Photo/Video Evidence */}
       {selectedVisitForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="geo-modal-fullviewport bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl flex flex-col justify-between overflow-y-auto">
             <div className="flex items-start justify-between border-b border-slate-800 pb-3">
               <div>
                 <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">

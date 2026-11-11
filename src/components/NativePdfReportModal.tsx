@@ -178,12 +178,12 @@ export const NativePdfReportModal: React.FC<NativePdfReportModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-5 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-0 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="native-pdf-modal-title"
     >
-      <div className="bg-[#1E293B] border border-slate-700 rounded-2xl max-w-5xl w-full max-h-[94dvh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="geo-modal-fullviewport bg-[#1E293B] border border-slate-700 rounded-2xl flex flex-col shadow-2xl overflow-hidden">
         {/* Top Toolbar (No-Print) */}
         <div className="bg-[#0A2540] px-4 sm:px-6 py-3.5 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
           <div className="flex items-center gap-2.5">
@@ -287,10 +287,10 @@ export const NativePdfReportModal: React.FC<NativePdfReportModalProps> = ({
         )}
 
         {/* Interactive 100% Fluid A4 Document Preview Surface */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-900/90">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-slate-900/90 w-full">
           <div
             id="geolatina-native-a4-printable"
-            className="bg-white text-slate-900 rounded-xl shadow-2xl mx-auto w-full max-w-4xl p-4 sm:p-8 space-y-6 break-words [overflow-wrap:anywhere]"
+            className="bg-white text-slate-900 rounded-xl shadow-2xl w-full max-w-full p-4 sm:p-8 space-y-6 break-words [overflow-wrap:anywhere]"
           >
             {/* Corporate Document Header */}
             <div className="border-b-2 border-[#0A2540] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -559,6 +559,25 @@ export const NativePdfReportModal: React.FC<NativePdfReportModalProps> = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Sticky Bottom Close/Print Action Bar for Smartphones & Tablets (No-Print) */}
+        <div className="bg-[#0A2540] px-4 py-3 border-t border-slate-700 flex items-center justify-between gap-2 shrink-0 no-print">
+          <button
+            type="button"
+            onClick={handlePrintNativeA4}
+            className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[44px]"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Imprimir / Descargar PDF A4</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-600 cursor-pointer min-h-[44px]"
+          >
+            Cerrar Visor
+          </button>
         </div>
       </div>
     </div>

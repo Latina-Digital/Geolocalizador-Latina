@@ -119,27 +119,10 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
           )}
         </div>
 
-        {/* Quick Simulation Trigger for testing */}
-        <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2">
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-            Prueba de Disparo de Alertas Inmediatas:
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => onTriggerSimulatedAlert('PARADA_PROLONGADA')}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1"
-            >
-              <AlertTriangle className="w-3 h-3" />
-              <span>Simular Parada</span>
-            </button>
-            <button
-              onClick={() => onTriggerSimulatedAlert('EXCESO_VELOCIDAD')}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-red-400 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1"
-            >
-              <ShieldAlert className="w-3 h-3" />
-              <span>Simular Exceso Vel.</span>
-            </button>
-          </div>
+        {/* Production Telemetry Footer */}
+        <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+          <span>🔒 Telemetría GPS Satelital en Producción</span>
+          <span className="text-emerald-400 font-semibold">● Enlace LatinaSoft Activo</span>
         </div>
       </div>
     </div>

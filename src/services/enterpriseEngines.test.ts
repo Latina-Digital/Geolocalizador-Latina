@@ -14,6 +14,12 @@ import {
   moveBlockInOrder,
 } from './uiConfigEngine';
 import { getRoleHierarchyLevel } from './latinaApiEngine';
+import {
+  buildDirectionsRequestsForChunks,
+  chunkRouteWaypoints,
+  classifyVisitMarkerCategory,
+} from '../utils/googleMapsRouting';
+import { CARLOS_VISITS } from '../data/mockData';
 
 test('GeoIntegrityGuard Heuristic #1 detects impossible teleportation speed (>130 km/h)', () => {
   const now = Date.now();
@@ -131,3 +137,41 @@ test('uiConfigEngine reorders dashboard blocks cleanly', () => {
   assert.equal(reordered[0], 'MAPA_Y_OPERACIONES');
   assert.equal(reordered[1], 'KPIS_RESUMEN');
 });
+
+test('chunkRouteWaypoints splits >25 GPS points into sequential continuous street segments', () => {
+  const thirtyPoints = Array.from({ length: 30 }, (_, i) => ({
+    lat: -2.14 - i * 0.001,
+    lng: -79.90 - i * 0.001,
+  }));
+  const chunks = chunkRouteWaypoints(thirtyPoints, 25);
+  assert.equal(chunks.length, 2);
+  assert.deepEqual(chunks[0].origin, thirtyPoints[0]);
+  assert.deepEqual(chunks[0].destination, thirtyPoints[24]);
+  assert.equal(chunks[0].intermediates.length, 23);
+  assert.deepEqual(chunks[1].origin, thirtyPoints[24]);
+  assert.deepEqual(chunks[1].destination, thirtyPoints[29]);
+});
+
+test('classifyVisitMarkerCategory assigns GREEN_EFFECTIVE, BLUE_FOLLOWUP, and RED_ALERT accurately', () => {
+  assert.equal(classifyVisitMarkerCategory(CARLOS_VISITS[0]), 'GREEN_EFFECTIVE');
+  assert.equal(classifyVisitMarkerCategory(CARLOS_VISITS[2]), 'BLUE_FOLLOWUP');
+  assert.equal(classifyVisitMarkerCategory(CARLOS_VISITS[3]), 'RED_ALERT');
+});
+
+test('buildDirectionsRequestsForChunks builds sequential DirectionsRequest specs with stopover waypoints when points exceed 25', () => {
+  const fiftyTwoPoints = Array.from({ length: 52 }, (_, i) => ({
+    lat: -2.14 - i * 0.001,
+    lng: -79.90 - i * 0.001,
+  }));
+  const reqs = buildDirectionsRequestsForChunks(fiftyTwoPoints, 25);
+  assert.equal(reqs.length, 3);
+  assert.equal(reqs[0].waypoints.length, 23);
+  assert.equal(reqs[0].waypoints[0].stopover, true);
+  assert.equal(reqs[0].optimizeWaypoints, false);
+  assert.equal(reqs[0].travelMode, 'DRIVING');
+  assert.deepEqual(reqs[1].origin, reqs[0].destination);
+  assert.equal(reqs[1].waypoints.length, 23);
+  assert.deepEqual(reqs[2].origin, reqs[1].destination);
+  assert.equal(reqs[2].waypoints.length, 2);
+});
+

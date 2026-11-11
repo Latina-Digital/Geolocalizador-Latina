@@ -43,7 +43,9 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { MapTracker } from './MapTracker';
+import { VisitDetailAndStreetViewModal } from './VisitDetailAndStreetViewModal';
 import { formatMinutesToHuman, getRemainingMinutesTo9Hours } from '../utils/geoCalculations';
+import { useGeoLatinaSystem } from '../context/GeoLatinaSystemContext';
 
 interface AdminSupervisorDashboardProps {
   currentUser: User;
@@ -53,15 +55,13 @@ interface AdminSupervisorDashboardProps {
   alerts: SuspiciousAlert[];
   onResolveAlert: (alertId: string) => void;
   onExportPDF: (agentId: string) => void;
-  onSimulateMovement: (agentId: string) => void;
+  onOpenRegisterVisitModal?: () => void;
   onAddNewAlert: (alert: SuspiciousAlert) => void;
   customGeofences: CustomGeofence[];
   onSaveGeofence: (geofence: CustomGeofence) => void;
   onDeleteGeofence: (id: string) => void;
   onToggleGeofenceActive: (id: string, active: boolean) => void;
   onAssignGeofenceToAgent: (geofenceId: string, agentId: string) => void;
-  onSimulateGeofenceBreach: (agentId: string) => void;
-  onSimulate9HourLimit?: (agentId: string) => void;
 }
 
 export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> = ({
@@ -72,26 +72,29 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
   alerts,
   onResolveAlert,
   onExportPDF,
-  onSimulateMovement,
-  onAddNewAlert,
+  onOpenRegisterVisitModal,
   customGeofences,
   onSaveGeofence,
   onDeleteGeofence,
   onToggleGeofenceActive,
   onAssignGeofenceToAgent,
-  onSimulateGeofenceBreach,
-  onSimulate9HourLimit,
 }) => {
+  const { user: latinaSession, auditLogs, openAuditHistoryModal } = useGeoLatinaSystem();
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('TODAS');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('TODOS');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeSideTab, setActiveSideTab] = useState<'agentes' | 'alertas' | 'geocercas' | 'visitas'>('agentes');
+  const [mobileBottomMode, setMobileBottomMode] = useState<'mixto' | 'mapa' | 'visitas'>('mixto');
 
   // Interactive Geofence Drawing State
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
   const [drawingVertices, setDrawingVertices] = useState<LatLngPoint[]>([]);
   const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
   const [selectedEvidenceVisit, setSelectedEvidenceVisit] = useState<ClientVisit | null>(null);
+  const [selectedInspectVisit, setSelectedInspectVisit] = useState<{
+    visit: ClientVisit;
+    seqIndex: number;
+  } | null>(null);
 
   // New Geofence Form State
   const [newGeoName, setNewGeoName] = useState<string>('');
@@ -203,15 +206,15 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
   const unresolvedAlerts = alerts.filter(a => !a.resolved);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+    <div className="geo-workspace-shell w-full max-w-full flex-1 min-h-[calc(100dvh-118px)] flex flex-col">
       {/* Hierarchy Banner & Zone Indicator */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
         <div>
           <div className="flex items-center gap-2">
             <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
               <ShieldCheck className="w-5 h-5" />
             </span>
-            <h1 className="text-lg sm:text-xl font-bold text-white tracking-wide">
+            <h1 className="geo-fluid-title font-bold text-white tracking-wide">
               Centro de Monitoreo Satelital & Control de Rutas
             </h1>
           </div>
@@ -225,20 +228,20 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
 
         {/* Global Quick Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {currentAgent && (
+          {onOpenRegisterVisitModal && (
             <button
-              onClick={() => onSimulateMovement(currentAgent.user.id)}
-              className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95"
-              title="Simula un nuevo punto en la ruta de telemetría"
+              onClick={onOpenRegisterVisitModal}
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              title="Registrar o cerrar una visita comercial real con coordenadas GPS y Geocodificación Inversa"
             >
-              <Navigation className="w-3.5 h-3.5" />
-              <span>Simular Paso GPS</span>
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>➕ Registrar / Cerrar Visita en Ubicación Actual</span>
             </button>
           )}
 
           <button
             onClick={() => onExportPDF(currentAgent?.user.id || '')}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
             title="Exportar informe en formato PDF con membrete oficial"
           >
             <FileDown className="w-3.5 h-3.5" />
@@ -247,15 +250,15 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
         </div>
       </div>
 
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+      {/* KPI Stats Grid (Auto-Expanding Edge-to-Edge: 2 cols Mobile, 4 cols Tablet Portrait, Fluid Desktop/4K) */}
+      <div className={`geo-kpi-auto-grid w-full shrink-0 ${mobileBottomMode === 'mapa' ? 'hidden md:grid' : ''}`}>
+        <div className="geo-fluid-card bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Equipo en Ruta</span>
             <Users className="w-4 h-4 text-amber-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white">{activeSubordinates}</span>
+            <span className="geo-kpi-value font-black text-white">{activeSubordinates}</span>
             <span className="text-xs text-slate-400">/ {totalSubordinates} activos</span>
           </div>
           <div className="mt-1 text-[11px] text-emerald-400 font-medium">
@@ -263,13 +266,13 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+        <div className="geo-fluid-card bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Cumplimiento Visitas</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-400">{globalCompliance}%</span>
+            <span className="geo-kpi-value font-black text-emerald-400">{globalCompliance}%</span>
             <span className="text-xs text-slate-400">({totalCompletedVisits}/{totalPlannedVisits})</span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
@@ -277,13 +280,13 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+        <div className="geo-fluid-card bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Km Totales Flota</span>
             <TrendingUp className="w-4 h-4 text-sky-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-sky-400">{totalKmAll.toFixed(1)}</span>
+            <span className="geo-kpi-value font-black text-sky-400">{totalKmAll.toFixed(1)}</span>
             <span className="text-xs text-slate-400">km hoy</span>
           </div>
           <div className="mt-1 text-[11px] text-slate-400">
@@ -291,13 +294,13 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+        <div className="geo-fluid-card bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Ventas Facturadas</span>
             <span className="text-xs font-bold text-amber-500">$ USD</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl font-black text-amber-400">
+            <span className="geo-kpi-value font-black text-amber-400">
               ${totalSalesAll.toLocaleString('es-EC', { maximumFractionDigits: 0 })}
             </span>
           </div>
@@ -306,13 +309,13 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl col-span-2 lg:col-span-1">
+        <div className="geo-fluid-card bg-slate-900 border border-slate-800 p-3.5 rounded-xl col-span-2 md:col-span-1">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Alertas Operativas</span>
             <ShieldAlert className="w-4 h-4 text-red-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className={`text-2xl font-black ${unresolvedAlerts.length > 0 ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>
+            <span className={`geo-kpi-value font-black ${unresolvedAlerts.length > 0 ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>
               {unresolvedAlerts.length}
             </span>
             <span className="text-xs text-slate-400">pendientes</span>
@@ -323,17 +326,21 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
         </div>
       </div>
 
-      {/* Main Split Layout: Left Map & Right Subordinates / Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Interactive Map & Telemetry HUD (7 cols) */}
-        <div className="lg:col-span-7 space-y-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-xl">
+      {/* Main Split Layout: Adaptive Multi-Device Grid (Smartphone Stack/Tabs | Tablet 60/40 | Desktop 8/4 | Ultrawide 2.5fr/1fr/1fr) */}
+      <div className="geo-main-split-grid flex-1 w-full h-full min-h-[540px]">
+        {/* Column 1: Interactive Google Maps & Telemetry HUD */}
+        <div
+          className={`w-full h-full min-h-[520px] flex flex-col ${
+            mobileBottomMode === 'visitas' ? 'hidden md:flex' : 'flex'
+          }`}
+        >
+          <div className="geo-fluid-card bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-xl flex-1">
             {/* Map Header Status & Geofence Drawing Toolbar */}
-            <div className="flex flex-wrap items-center justify-between px-2 py-1.5 mb-2 border-b border-slate-800 gap-2">
+            <div className="flex flex-wrap items-center justify-between px-2 py-1.5 mb-2 border-b border-slate-800 gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-amber-500" />
                 <span className="text-xs font-bold text-white">
-                  Rastreo: {currentAgent.user.name}
+                  Cartografía Google Maps: {currentAgent.user.name}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
                   {currentAgent.currentLocation.lat.toFixed(4)}, {currentAgent.currentLocation.lng.toFixed(4)}
@@ -390,12 +397,17 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
               </div>
             </div>
 
-            {/* Leaflet Map Surface with drawing integration */}
-            <div className="h-[460px] w-full">
+            {/* Official Google Maps Surface (Coupled to 100% height & width) */}
+            <div
+              className={`geo-map-surface w-full h-full min-h-[500px] flex-1 relative flex flex-col ${
+                mobileBottomMode === 'mapa' ? 'geo-map-surface-mobile-full' : ''
+              }`}
+            >
               <MapTracker
                 selectedAgent={currentAgent}
                 allAgents={accessibleAgents}
                 onSelectAgent={onSelectAgent}
+                onOpenRegisterVisitModal={onOpenRegisterVisitModal}
                 activeAlerts={alerts}
                 customGeofences={customGeofences}
                 isDrawingGeofence={isDrawingMode}
@@ -405,7 +417,7 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
             </div>
 
             {/* Breadcrumb Info Bar */}
-            <div className="mt-3 px-2 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
+            <div className="mt-2.5 px-2 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                 <span>{currentAgent.routeHistory.length + 1} puntos registrados en recorrido continuo</span>
@@ -417,9 +429,13 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
           </div>
         </div>
 
-        {/* Right Column: Subordinates List, Alerts, Geofences and Visits (5 cols) */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col h-[525px]">
+        {/* Column 2: Subordinates List, Alerts, Geofences and Visits */}
+        <div
+          className={`w-full h-full min-h-[520px] flex flex-col ${
+            mobileBottomMode === 'mapa' ? 'hidden md:flex' : 'flex'
+          }`}
+        >
+          <div className="geo-fluid-card bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 min-h-[520px]">
             {/* Tabs Selector */}
             <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 mb-3 overflow-x-auto">
               <button
@@ -676,23 +692,17 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
                           </span>
                         </div>
 
-                        {/* Quick Action: Assign and Simulate Breach */}
+                        {/* Quick Action: Assign to Current Executive */}
                         <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
                           <button
                             onClick={() => onAssignGeofenceToAgent(geo.id, currentAgent.user.id)}
-                            className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+                            className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 cursor-pointer"
                           >
                             <span>Asignar a {currentAgent.user.name}</span>
                           </button>
-
-                          <button
-                            onClick={() => onSimulateGeofenceBreach(currentAgent.user.id)}
-                            className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800/60 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
-                            title="Simula que el agente sale de los límites de esta geocerca para verificar la alerta inmediata"
-                          >
-                            <ShieldAlert className="w-3 h-3 text-red-400" />
-                            <span>Probar Alerta</span>
-                          </button>
+                          <span className="text-[10px] text-emerald-400 font-mono">
+                            ● Perímetro Satelital Activo
+                          </span>
                         </div>
                       </div>
                     ))
@@ -835,15 +845,6 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                             <span>Jornada activa (Límite 9h: <b>{formatMinutesToHuman(remaining9hMin)}</b>)</span>
                           </div>
-                          {onSimulate9HourLimit && (
-                            <button
-                              onClick={() => onSimulate9HourLimit(currentAgent.user.id)}
-                              className="px-2 py-0.5 bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-800/60 rounded text-[9px] font-bold transition-colors"
-                              title="Simular que el ejecutivo cumple 9 horas de sesión continua para verificar el cierre automático"
-                            >
-                              Simular 9h
-                            </button>
-                          )}
                         </div>
                       ) : (
                         <span className="text-slate-500 text-[10px]">Jornada no iniciada</span>
@@ -872,12 +873,15 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
 
                           {/* Client Visit Card */}
                           <div
-                            className={`p-3 rounded-xl border text-xs transition-all ${
-                              isComplete
+                            onClick={() => setSelectedInspectVisit({ visit: vis, seqIndex: idx + 1 })}
+                            className={`p-3 rounded-xl border text-xs transition-all cursor-pointer hover:border-amber-500/70 ${
+                              vis.hasFraudAlert
+                                ? 'bg-red-950/30 border-red-600/80'
+                                : isComplete
                                 ? 'bg-slate-950/80 border-slate-800'
                                 : isInVisit
                                 ? 'bg-amber-950/20 border-amber-600/60 shadow-md'
-                                : 'bg-slate-950/40 border-slate-800/60 opacity-75'
+                                : 'bg-slate-950/40 border-slate-800/60 opacity-85'
                             }`}
                           >
                             {/* Card Top: Stop # and Tachuela Pin Badge */}
@@ -889,7 +893,11 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
                               </div>
 
                               {/* Tachuela Pushpin indicator */}
-                              {isComplete ? (
+                              {vis.hasFraudAlert ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-600 text-white animate-pulse">
+                                  🚨 Alerta GPS
+                                </span>
+                              ) : isComplete ? (
                                 <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 border ${
                                   vis.activityType === 'COBRANZA'
                                     ? 'bg-purple-950 text-purple-300 border-purple-800'
@@ -911,7 +919,7 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
                             </div>
 
                             <p className="text-[11px] text-slate-400 mt-0.5">
-                              {vis.address}
+                              {vis.reverseGeocodedAddress || vis.address}
                             </p>
 
                             {/* Timing Details: Scheduled, Arrival, Duration in Client */}
@@ -930,64 +938,22 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
                               </div>
                             </div>
 
-                            {/* Registered Activity Breakdown (Venta vs Cobranza) */}
-                            {isComplete && (
-                              <div className="mt-2 pt-2 border-t border-slate-800/80 space-y-1">
-                                {vis.activityType === 'VENTA' && (
-                                  <div className="flex items-center justify-between text-[11px] bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-900/50">
-                                    <div className="flex items-center gap-1 text-emerald-300 font-semibold">
-                                      <ShoppingCart className="w-3.5 h-3.5" />
-                                      <span>Pedido: ${vis.orderAmount?.toLocaleString('es-EC', { minimumFractionDigits: 2 })} USD</span>
-                                    </div>
-                                    <span className="text-[10px] text-emerald-400 font-mono">
-                                      Factura #{vis.invoiceOrReceiptNumber || 'S/N'}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {vis.activityType === 'COBRANZA' && (
-                                  <div className="flex items-center justify-between text-[11px] bg-purple-950/40 p-1.5 rounded-lg border border-purple-900/50">
-                                    <div className="flex items-center gap-1 text-purple-300 font-semibold">
-                                      <Receipt className="w-3.5 h-3.5" />
-                                      <span>Cobro: ${vis.collectedAmount?.toLocaleString('es-EC', { minimumFractionDigits: 2 })} USD</span>
-                                    </div>
-                                    <span className="text-[10px] text-purple-400 font-mono">
-                                      Recibo #{vis.invoiceOrReceiptNumber || 'S/N'} ({vis.paymentMethod})
-                                    </span>
-                                  </div>
-                                )}
-
-                                {vis.notes && (
-                                  <p className="text-[10px] text-slate-400 italic">
-                                    "{vis.notes}"
-                                  </p>
-                                )}
-
-                                {/* Evidence Photo Thumbnail & Full View Trigger */}
-                                {vis.evidenceUrl && (
-                                  <div className="flex items-center justify-between pt-1">
-                                    <div className="flex items-center gap-1.5">
-                                      <img
-                                        src={vis.evidenceUrl}
-                                        alt="Evidencia"
-                                        className="w-7 h-7 rounded object-cover border border-slate-700 cursor-pointer hover:opacity-80"
-                                        onClick={() => setSelectedEvidenceVisit(vis)}
-                                      />
-                                      <span className="text-[10px] text-slate-400">
-                                        Evidencia adjunta
-                                      </span>
-                                    </div>
-                                    <button
-                                      onClick={() => setSelectedEvidenceVisit(vis)}
-                                      className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-amber-400 text-[10px] font-semibold border border-slate-700 flex items-center gap-1 transition-colors"
-                                    >
-                                      <Camera className="w-3 h-3" />
-                                      <span>Ver Foto</span>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                RUC: {vis.clientRuc || '0992348192001'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedInspectVisit({ visit: vis, seqIndex: idx + 1 });
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#0A2540] hover:bg-slate-800 text-amber-400 font-bold text-[10px] flex items-center gap-1 border border-slate-700"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Ficha Completa & Street View</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -998,12 +964,103 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
             })()}
           </div>
         </div>
+
+        {/* Column 3 (Exclusivo Monitores Ultrawide y 4K > 1920px): Panel de Detalle / Auditoría en Paralelo (1fr) */}
+        <div className="geo-ultrawide-third-panel min-h-[520px]">
+          <div className="geo-fluid-card bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 min-h-[520px]">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-amber-400">
+                  Auditoría & Telemetría en Vivo (Vista 4K)
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Bitácora de {currentAgent.user.name} · {auditLogs.length} eventos
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openAuditHistoryModal}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-bold border border-slate-700 cursor-pointer"
+              >
+                📋 Bitácora Completa
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {auditLogs.slice(0, 12).map((entry) => (
+                <div
+                  key={entry.id}
+                  className={`p-2.5 rounded-xl border text-xs ${
+                    entry.alertState === 'CRITICA'
+                      ? 'bg-red-950/30 border-red-700/80'
+                      : 'bg-slate-950/70 border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span className="font-bold text-amber-400">{entry.eventType}</span>
+                    <span>{entry.timestampLocal}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-200 mt-1 leading-snug">{entry.detail}</p>
+                  <div className="mt-1 text-[10px] font-mono text-slate-500">
+                    GPS: {entry.lat.toFixed(4)}, {entry.lng.toFixed(4)} · {entry.nombreUsuario}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Barra de Pestañas Inferiores Rápidas para Smartphones (<= 767px) */}
+      <nav
+        aria-label="Navegación rápida móvil"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-2 py-1.5 grid grid-cols-3 gap-1.5 shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={() => setMobileBottomMode(mobileBottomMode === 'mapa' ? 'mixto' : 'mapa')}
+          className={`py-2 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
+            mobileBottomMode === 'mapa'
+              ? 'bg-amber-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-200 border border-slate-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4 shrink-0" />
+          <span className="truncate">Mapa en Vivo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (onOpenRegisterVisitModal) onOpenRegisterVisitModal();
+          }}
+          className="py-2 px-2 rounded-xl text-[11px] font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center gap-1 shadow-md"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
+          <span className="truncate">Registrar Visita</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileBottomMode('visitas');
+            setActiveSideTab('visitas');
+          }}
+          className={`py-2 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
+            mobileBottomMode === 'visitas'
+              ? 'bg-amber-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-200 border border-slate-800'
+          }`}
+        >
+          <Clock className="w-4 h-4 shrink-0" />
+          <span className="truncate">Mis Visitas / Historial</span>
+        </button>
+      </nav>
 
       {/* Modal: Save Drawn Geofence */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div className="geo-modal-fullviewport bg-slate-900 border border-slate-700 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] p-5 shadow-2xl flex flex-col justify-between overflow-y-auto">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/40">
@@ -1022,7 +1079,7 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
               </button>
             </div>
 
-            <form onSubmit={handleSaveGeofenceSubmit} className="space-y-3">
+            <form onSubmit={handleSaveGeofenceSubmit} className="space-y-3 flex-1 flex flex-col justify-between mt-3">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
                   Nombre de la Geocerca / Área Comercial
@@ -1133,8 +1190,8 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
 
       {/* Modal: Supervisor Evidence Inspector (Photo/Video & Receipt) */}
       {selectedEvidenceVisit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md">
+          <div className="geo-modal-fullviewport bg-slate-900 border border-slate-700 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] p-5 shadow-2xl flex flex-col justify-between overflow-y-auto">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5">
                 <div className={`p-2 rounded-xl border ${
@@ -1229,6 +1286,16 @@ export const AdminSupervisorDashboard: React.FC<AdminSupervisorDashboardProps> =
           </div>
         </div>
       )}
+
+      {/* Modal 5-Section Complete Visit Detail & Street View */}
+      <VisitDetailAndStreetViewModal
+        visit={selectedInspectVisit?.visit || null}
+        visitSequenceIndex={selectedInspectVisit?.seqIndex || 1}
+        totalVisitsInRoute={currentAgent.visits.length}
+        executiveUser={currentAgent.user}
+        viewerRole={latinaSession?.rol || 'ADMINISTRADOR'}
+        onClose={() => setSelectedInspectVisit(null)}
+      />
     </div>
   );
 };

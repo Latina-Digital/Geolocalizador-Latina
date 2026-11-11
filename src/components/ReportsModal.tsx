@@ -81,10 +81,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full p-6 shadow-2xl max-h-[90vh] flex flex-col space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm">
+      <div className="geo-modal-fullviewport bg-slate-900 border border-slate-700 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] p-5 sm:p-6 shadow-2xl flex flex-col space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
               <FileText className="w-5 h-5" />
@@ -103,7 +103,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         </div>
 
         {/* Agent Selector Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 shrink-0">
           <span className="text-xs text-slate-400 font-bold uppercase shrink-0">Colaborador:</span>
           {agents.map((ag) => (
             <button
@@ -121,16 +121,16 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         </div>
 
         {/* Modal Content Scrollable */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1 w-full">
           {/* Executive KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+          <div className="geo-kpi-auto-grid w-full">
+            <div className="geo-fluid-card bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
               <span className="text-[11px] text-slate-400 uppercase font-semibold">Duración de Ruta</span>
               <div className="text-xl font-black text-amber-400 mt-1 font-mono">{routeDurationFormatted}</div>
               <span className="text-[10px] text-slate-400 font-medium">{totalVisitMinutes}m cli | {totalTravelMinutes}m tray</span>
             </div>
 
-            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+            <div className="geo-fluid-card bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
               <span className="text-[11px] text-slate-400 uppercase font-semibold">Visitas Cerradas</span>
               <div className="text-xl font-black text-emerald-400 mt-1">
                 {completedVisits} / {totalVisits}
@@ -138,13 +138,13 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
               <span className="text-[10px] text-slate-400 font-medium">{compliancePercent.toFixed(0)}% Efectividad</span>
             </div>
 
-            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+            <div className="geo-fluid-card bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
               <span className="text-[11px] text-slate-400 uppercase font-semibold">Km Recorridos</span>
               <div className="text-xl font-black text-sky-400 mt-1">{agentState.todayKm} km</div>
               <span className="text-[10px] text-slate-400 font-medium">GPS alta precisión</span>
             </div>
 
-            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+            <div className="geo-fluid-card bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
               <span className="text-[11px] text-slate-400 uppercase font-semibold">Producción Total</span>
               <div className="text-xl font-black text-amber-400 mt-1">
                 ${(totalSales + totalCollected).toLocaleString('es-EC', { minimumFractionDigits: 0 })}

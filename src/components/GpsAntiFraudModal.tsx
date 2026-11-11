@@ -56,12 +56,12 @@ export const GpsAntiFraudModal: React.FC<GpsAntiFraudModalProps> = ({
       {/* 1. ALERTA VISUAL EMERGENTE DESTACADA EN ROJO CORPORATIVO (MODAL DE ALTA PRIORIDAD) */}
       {urgentFraudPopup && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-6"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-2 sm:p-4"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="urgent-fraud-modal-title"
         >
-          <div className="bg-[#1E293B] border-2 border-[#D32F2F] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-[#1E293B] border-2 border-[#D32F2F] rounded-2xl w-[96vw] max-w-[96vw] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-[#D32F2F] px-5 py-4 flex items-center justify-between gap-3 text-white">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-white/15 border border-white/30">
@@ -159,12 +159,12 @@ export const GpsAntiFraudModal: React.FC<GpsAntiFraudModalProps> = ({
       {/* 2. PANEL COMPLETO DE AUDITORÍA ANTI-FRAUDE GPS ("🚨 Alertas de Ubicación") */}
       {isGpsFraudDrawerOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-5 overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="gps-fraud-drawer-title"
         >
-          <div className="bg-[#1E293B] border border-red-800/80 rounded-2xl max-w-5xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="geo-modal-fullviewport bg-[#1E293B] border border-red-800/80 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-[#0A2540] via-red-950 to-[#0A2540] px-5 py-4 border-b border-red-800/70 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">

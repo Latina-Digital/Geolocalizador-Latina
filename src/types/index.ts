@@ -29,16 +29,26 @@ export interface RoutePoint {
   status: 'driving' | 'stopped' | 'in_visit' | 'idle' | 'off_route';
 }
 
-export type ActivityType = 'VENTA' | 'COBRANZA' | 'SEGUIMIENTO' | 'OTRO';
+export type ActivityType =
+  | 'VENTA'
+  | 'COTIZACION_PROFORMA'
+  | 'COBRANZA'
+  | 'VISITA_TECNICA'
+  | 'POSTVENTA'
+  | 'SEGUIMIENTO'
+  | 'OTRO';
 export type PaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'CREDITO';
 
 export interface ClientVisit {
   id: string;
   name: string;
   companyName: string;
+  clientRuc?: string; // Código / RUC LatinaSoft
+  clientType?: string; // Distribuidor, Constructora, Ferretería, Industrial, etc.
   contactPerson: string;
   phone: string;
   address: string;
+  reverseGeocodedAddress?: string; // Dirección vial exacta resuelta por Google Geocoding API
   lat: number;
   lng: number;
   scheduledTime: string; // e.g. "09:30"
@@ -48,12 +58,14 @@ export interface ClientVisit {
   travelMinutesFromPrevious?: number; // Tiempo ocupado en trayecto
   status: 'pendiente' | 'en_camino' | 'en_visita' | 'completada' | 'no_visitada';
   
-  // Actividad registrada (Venta o Cobranza)
+  // Actividad registrada (Venta, Cotización, Cobranza, Visita Técnica, Postventa)
   activityType?: ActivityType;
   orderAmount?: number; // USD
   collectedAmount?: number; // USD (para cobranza)
   invoiceOrReceiptNumber?: string;
   paymentMethod?: PaymentMethod;
+  managedProducts?: string; // Productos / líneas gestionadas Industrial Latina
+  operationStatus?: 'Concretado' | 'En negociación' | 'Reprogramado' | 'Sin gestión';
   notes?: string;
   
   // Evidencia obligatoria (Foto o Video)
@@ -61,6 +73,12 @@ export interface ClientVisit {
   evidenceUrl?: string; // base64 or preview url
   evidenceTimestamp?: string;
   hasTachuelaPin?: boolean; // Tachuela especial en el mapa
+
+  // Auditoría Técnica de Ubicación (Supervisor y cargos superiores)
+  gpsAccuracyMeters?: number;
+  arrivalSpeedKmh?: number;
+  gpsAuthenticSeal?: boolean;
+  hasFraudAlert?: boolean;
 }
 
 export type AlertType = 

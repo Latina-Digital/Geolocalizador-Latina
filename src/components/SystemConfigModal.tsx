@@ -15,6 +15,11 @@ import {
   LatinaSysConfig,
   PingDiagnosticResult,
   adaptLatinaApiResponse,
+  GOOGLE_MAPS_DEFAULT_LIBRARIES,
+  buildGoogleMapsScriptUrl,
+  saveGoogleMapsApiKeyToSysConfig,
+  loadGoogleMapsScriptDynamically,
+  canUserAccessTicConfig,
 } from '../services/latinaApiEngine';
 import { useGeoLatinaSystem } from '../context/GeoLatinaSystemContext';
 import {
@@ -43,6 +48,7 @@ type ConfigTabId = 'interconexion' | 'seguridad' | 'mapeo' | 'diagnostico';
 
 export const SystemConfigModal: React.FC = () => {
   const {
+    user,
     config,
     isSysConfigOpen,
     closeSysConfigModal,
@@ -55,8 +61,19 @@ export const SystemConfigModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ConfigTabId>('interconexion');
   const [draft, setDraft] = useState<LatinaSysConfig>(config);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showGoogleMapsKey, setShowGoogleMapsKey] = useState(true);
   const [showTechPass, setShowTechPass] = useState(false);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
+  const [gmapsScriptStatus, setGmapsScriptStatus] = useState<{
+    loading: boolean;
+    loaded: boolean;
+    scriptUrl: string;
+    error?: string;
+  }>(() => ({
+    loading: false,
+    loaded: typeof window !== 'undefined' && Boolean((window as any).google?.maps),
+    scriptUrl: buildGoogleMapsScriptUrl(config.googleMapsApiKey || '', GOOGLE_MAPS_DEFAULT_LIBRARIES),
+  }));
 
   // Diagnostic ping state
   const [isPinging, setIsPinging] = useState(false);
@@ -82,6 +99,122 @@ export const SystemConfigModal: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Función interna en SystemConfigModal para almacenar 'googleMapsApiKey' en 'geolatina_sys_config'
+  // y cargar dinámicamente el script de Google Maps usando 'https://maps.googleapis.com/maps/api/js?key=' + apiKey con las librerías 'geometry,places,marker'
+  const storeKeyAndLoadGoogleMapsScript = async (rawApiKey: string) => {
+    const apiKey = (rawApiKey || '').trim();
+    const updatedConfig: LatinaSysConfig = {
+      ...draft,
+      googleMapsApiKey: apiKey,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    try {
+      const existingRaw = localStorage.getItem('geolatina_sys_config');
+      const existingParsed = existingRaw ? JSON.parse(existingRaw) : {};
+      const payloadToStore = {
+        ...existingParsed,
+        ...updatedConfig,
+        googleMapsApiKey: apiKey,
+      };
+      localStorage.setItem('geolatina_sys_config', JSON.stringify(payloadToStore));
+    } catch {
+      // Fallback via engine helper
+    }
+
+    saveGoogleMapsApiKeyToSysConfig(apiKey);
+    setDraft(updatedConfig);
+    updateSysConfig(updatedConfig);
+
+    const scriptSrc =
+      'https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&libraries=geometry,places,marker';
+
+    if (!apiKey) {
+      setGmapsScriptStatus({
+        loading: false,
+        loaded: false,
+        scriptUrl: scriptSrc,
+        error: 'Ingrese una Google Maps API Key válida.',
+      });
+      return { loaded: false, scriptUrl: scriptSrc };
+    }
+
+    setGmapsScriptStatus({
+      loading: true,
+      loaded: false,
+      scriptUrl: scriptSrc,
+    });
+
+    if (typeof document !== 'undefined') {
+      const existingEl = document.querySelector(
+        'script[src*="maps.googleapis.com/maps/api/js"]'
+      ) as HTMLScriptElement | null;
+
+      if (!existingEl) {
+        const script = document.createElement('script');
+        script.id = 'geolatina-google-maps-sdk';
+        script.type = 'text/javascript';
+        script.src =
+          'https://maps.googleapis.com/maps/api/js?key=' +
+          apiKey +
+          '&libraries=geometry,places,marker';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+    }
+
+    const result = await loadGoogleMapsScriptDynamically(apiKey, 'geometry,places,marker');
+    setGmapsScriptStatus({
+      loading: false,
+      loaded: result.loaded,
+      scriptUrl: result.scriptUrl,
+      error: result.error,
+    });
+    return result;
+  };
+
+  // Al iniciar o cuando cambia googleMapsApiKey en geolatina_sys_config, cargar dinámicamente el script de Google Maps
+  useEffect(() => {
+    let savedKey = (config.googleMapsApiKey || '').trim();
+    try {
+      const raw = localStorage.getItem('geolatina_sys_config');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.googleMapsApiKey) {
+          savedKey = String(parsed.googleMapsApiKey).trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!savedKey) return;
+    let active = true;
+    const apiKey = savedKey;
+    const scriptUrl =
+      'https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&libraries=geometry,places,marker';
+
+    setGmapsScriptStatus((prev) => ({
+      ...prev,
+      loading: true,
+      scriptUrl,
+    }));
+
+    loadGoogleMapsScriptDynamically(apiKey, 'geometry,places,marker').then((res) => {
+      if (!active) return;
+      setGmapsScriptStatus({
+        loading: false,
+        loaded: res.loaded,
+        scriptUrl: res.scriptUrl,
+        error: res.error,
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [config.googleMapsApiKey]);
+
   useEffect(() => {
     if (isSysConfigOpen) {
       setDraft(config);
@@ -90,12 +223,28 @@ export const SystemConfigModal: React.FC = () => {
     }
   }, [isSysConfigOpen, config, lastPingResult]);
 
-  if (!isSysConfigOpen) return null;
+  if (!isSysConfigOpen || !canUserAccessTicConfig(user)) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSaveAndLoadGoogleMapsScript = async (customKey?: string) => {
+    const cleanKey = (customKey !== undefined ? customKey : draft.googleMapsApiKey || '').trim();
+    const result = await storeKeyAndLoadGoogleMapsScript(cleanKey);
+
+    setSaveBanner(
+      result.loaded
+        ? 'googleMapsApiKey almacenada en geolatina_sys_config y script de Google Maps (geometry,places,marker) cargado dinámicamente.'
+        : `googleMapsApiKey almacenada en geolatina_sys_config. ${result.error || ''}`
+    );
+    setTimeout(() => setSaveBanner(null), 4500);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSysConfig(draft);
-    setSaveBanner('Configuración guardada en localStorage (geolatina_sys_config) y aplicada en caliente.');
+    const cleanKey = (draft.googleMapsApiKey || '').trim();
+    await storeKeyAndLoadGoogleMapsScript(cleanKey);
+
+    setSaveBanner(
+      'Configuración y googleMapsApiKey guardadas en localStorage (geolatina_sys_config) y script de Google Maps sincronizado.'
+    );
     setTimeout(() => setSaveBanner(null), 4000);
   };
 
@@ -182,12 +331,12 @@ export const SystemConfigModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sys-config-modal-title"
     >
-      <div className="bg-[#1E293B] border border-slate-700/90 rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="geo-modal-fullviewport bg-[#1E293B] border border-slate-700/90 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] shadow-2xl overflow-hidden flex flex-col">
         {/* Corporate Modal Header */}
         <div className="bg-[#0A2540] px-6 py-4 border-b border-slate-700/80 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
@@ -195,11 +344,16 @@ export const SystemConfigModal: React.FC = () => {
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h2 id="sys-config-modal-title" className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Configuración de Sistema e Interfaz API — LatinaSoft
-              </h2>
-              <p className="text-xs text-slate-300">
-                Parámetros de interconexión IIS (`LatinaWebApi`), SQL Server (`AdmUser`) y persistencia `geolatina_sys_config`
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 id="sys-config-modal-title" className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  Configuración de Conexiones — Área de TIC
+                </h2>
+                <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] font-mono font-bold">
+                  EXCLUSIVO PERFIL ADMIN · USUARIO XBRIONES
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Interconexión Syspro API (`POST /api/syspro/users`), Google Maps API Key y persistencia `geolatina_sys_config` · Operador: <strong className="text-amber-300">{user?.usuario} ({user?.rol})</strong>
               </p>
             </div>
           </div>
@@ -449,6 +603,79 @@ export const SystemConfigModal: React.FC = () => {
                       <option value="FORM_URLENCODED">Form URL-Encoded (application/x-www-form-urlencoded)</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Google Maps API Key (Producción) & Cargador Dinámico de Script */}
+                <div className="mt-2 pt-4 border-t border-slate-700/80 bg-[#0F172A]/90 p-4 rounded-xl border border-amber-500/40 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor="cfg-gmaps-key" className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                      <span>🗺️ Google Maps API Key (Producción)</span>
+                    </label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/60">
+                        geolatina_sys_config.googleMapsApiKey
+                      </span>
+                      <span
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                          gmapsScriptStatus.loaded
+                            ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300'
+                            : gmapsScriptStatus.loading
+                            ? 'bg-amber-950/80 border-amber-500/60 text-amber-300'
+                            : 'bg-slate-900 border-slate-700 text-slate-400'
+                        }`}
+                      >
+                        {gmapsScriptStatus.loading
+                          ? '⏳ Cargando SDK...'
+                          : gmapsScriptStatus.loaded
+                          ? '✓ SDK Activo (geometry,places,marker)'
+                          : 'SDK Pendiente'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        id="cfg-gmaps-key"
+                        type={showGoogleMapsKey ? 'text' : 'password'}
+                        value={draft.googleMapsApiKey || ''}
+                        onChange={(e) => setDraft({ ...draft, googleMapsApiKey: e.target.value })}
+                        placeholder="AIzaSy... (Google Maps Platform JavaScript API Key)"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3.5 pr-9 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowGoogleMapsKey(!showGoogleMapsKey)}
+                        aria-label={showGoogleMapsKey ? 'Ocultar Google Maps API Key' : 'Mostrar Google Maps API Key'}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        {showGoogleMapsKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSaveAndLoadGoogleMapsScript(draft.googleMapsApiKey)}
+                      className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs whitespace-nowrap transition-colors shadow cursor-pointer"
+                    >
+                      Guardar y Cargar Script JS
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-950/90 border border-slate-800 rounded-lg px-3 py-1.5 font-mono text-[10px] text-slate-300 break-all">
+                    <span className="text-slate-500">Script dinámico: </span>
+                    <span className="text-amber-300">
+                      {'https://maps.googleapis.com/maps/api/js?key=' +
+                        (draft.googleMapsApiKey ? draft.googleMapsApiKey.trim() : 'TU_API_KEY') +
+                        '&libraries=geometry,places,marker'}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400">
+                    Almacena <code className="text-amber-300">googleMapsApiKey</code> en{' '}
+                    <code className="text-amber-300">geolatina_sys_config</code> y carga dinámicamente el SDK oficial con las librerías{' '}
+                    <code className="text-emerald-300">geometry,places,marker</code>.
+                  </p>
                 </div>
               </div>
             </div>

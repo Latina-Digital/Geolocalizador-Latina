@@ -14,7 +14,7 @@ import {
   DashboardBlockId,
   moveBlockInOrder,
 } from '../services/uiConfigEngine';
-import { getRoleHierarchyLevel } from '../services/latinaApiEngine';
+import { canUserAccessTicConfig } from '../services/latinaApiEngine';
 import { useGeoLatinaSystem } from '../context/GeoLatinaSystemContext';
 import {
   Palette,
@@ -65,8 +65,8 @@ export const AdminUiBuilderModal: React.FC = () => {
     }
   }, [isUiBuilderOpen, uiConfig]);
 
-  // Exclusivo para ADMINISTRADOR / SISTEMAS (Nivel 4)
-  if (!isUiBuilderOpen || !user || getRoleHierarchyLevel(user.rol) < 4) {
+  // Exclusivo para Perfil ADMIN y Usuario XBRIONES
+  if (!isUiBuilderOpen || !canUserAccessTicConfig(user)) {
     return null;
   }
 
@@ -146,12 +146,12 @@ export const AdminUiBuilderModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-5 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="admin-ui-builder-title"
     >
-      <div className="bg-[#1E293B] border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="geo-modal-fullviewport bg-[#1E293B] border border-slate-700 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-[#0A2540] px-5 py-4 border-b border-slate-700 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">

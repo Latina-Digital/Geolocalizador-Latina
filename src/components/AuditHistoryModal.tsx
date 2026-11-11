@@ -117,12 +117,12 @@ export const AuditHistoryModal: React.FC<AuditHistoryModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-5 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="audit-history-modal-title"
     >
-      <div className="bg-[#1E293B] border border-slate-700 rounded-2xl max-w-6xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="geo-modal-fullviewport bg-[#1E293B] border border-slate-700 rounded-2xl w-[96vw] max-w-[96vw] h-[92dvh] max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-[#0A2540] px-4 sm:px-6 py-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
@@ -279,7 +279,7 @@ export const AuditHistoryModal: React.FC<AuditHistoryModalProps> = ({
               <button
                 type="button"
                 onClick={handleDownloadCsv}
-                className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer min-h-[40px]"
+                className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer min-h-[44px]"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>1. Descargar CSV / Excel (.csv)</span>
@@ -288,7 +288,7 @@ export const AuditHistoryModal: React.FC<AuditHistoryModalProps> = ({
               <button
                 type="button"
                 onClick={handleDownloadJson}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-600 font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer min-h-[40px]"
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-600 font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer min-h-[44px]"
               >
                 <FileJson className="w-4 h-4" />
                 <span>2. Descargar JSON (.json)</span>
@@ -297,7 +297,7 @@ export const AuditHistoryModal: React.FC<AuditHistoryModalProps> = ({
               <button
                 type="button"
                 onClick={onOpenNativePdfReport}
-                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer min-h-[40px]"
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer min-h-[44px]"
               >
                 <FileText className="w-4 h-4" />
                 <span>3. Informe Ejecutivo en PDF (.pdf)</span>
@@ -306,70 +306,130 @@ export const AuditHistoryModal: React.FC<AuditHistoryModalProps> = ({
           </div>
         </div>
 
-        {/* Responsive Table / Mobile Cards View */}
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Hybrid Responsive Table (Desktop/Tablet) + Stacked Cards & Touch Table Scroll (Mobile) */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
           {filteredLogs.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">
               No se encontraron registros en la bitácora con los filtros seleccionados.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0F172A]">
-              <table className="w-full text-left text-xs text-slate-200 border-collapse">
-                <thead>
-                  <tr className="bg-slate-900/95 border-b border-slate-800 text-slate-400 text-[11px] uppercase">
-                    <th className="py-3 px-3 whitespace-nowrap">Fecha / Hora</th>
-                    <th className="py-3 px-3 whitespace-nowrap">Usuario & Rol</th>
-                    <th className="py-3 px-3 whitespace-nowrap">Tipo de Evento</th>
-                    <th className="py-3 px-3 whitespace-nowrap">Coordenadas GPS</th>
-                    <th className="py-3 px-3 whitespace-nowrap">Dispositivo</th>
-                    <th className="py-3 px-3">Detalle de Acción Realizada</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {filteredLogs.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${
-                        entry.alertState === 'CRITICA' ? 'bg-red-950/25' : ''
-                      }`}
-                    >
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-300 whitespace-nowrap tabular-nums">
-                        <div>{entry.timestampLocal}</div>
-                        <div className="text-[10px] text-slate-500">{entry.id}</div>
-                      </td>
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="font-bold text-white">{entry.nombreUsuario}</div>
-                        <div className="text-[11px] text-amber-400">{entry.rol}</div>
-                      </td>
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="font-bold text-slate-200 block">{entry.eventType}</span>
-                        <span
-                          className={`text-[10px] font-semibold ${
-                            entry.alertState === 'CRITICA'
-                              ? 'text-red-400'
-                              : entry.alertState === 'ADVERTENCIA'
-                              ? 'text-amber-400'
-                              : 'text-emerald-400'
-                          }`}
-                        >
-                          ● {entry.alertState}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-300 whitespace-nowrap tabular-nums">
-                        {entry.lat.toFixed(4)}, {entry.lng.toFixed(4)}
-                      </td>
-                      <td className="py-2.5 px-3 text-[11px] text-slate-400 whitespace-nowrap">
-                        {entry.deviceBrowser}
-                      </td>
-                      <td className="py-2.5 px-3 text-xs text-slate-200 min-w-[240px] break-words">
-                        {entry.detail}
-                      </td>
+            <>
+              {/* Tarjetas Apiladas Automáticas al 100% del Ancho en Smartphones (<= 767px) */}
+              <div className="md:hidden space-y-2.5 w-full">
+                {filteredLogs.map((entry) => (
+                  <div
+                    key={`card-${entry.id}`}
+                    className={`w-full rounded-xl border p-3.5 text-xs space-y-2 ${
+                      entry.alertState === 'CRITICA'
+                        ? 'bg-red-950/30 border-red-600/80'
+                        : 'bg-[#0F172A] border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-white text-sm block">{entry.nombreUsuario}</span>
+                        <span className="text-[11px] text-amber-400 font-semibold">{entry.rol}</span>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                          entry.alertState === 'CRITICA'
+                            ? 'bg-red-600 text-white'
+                            : entry.alertState === 'ADVERTENCIA'
+                            ? 'bg-amber-500/20 text-amber-300'
+                            : 'bg-emerald-500/20 text-emerald-300'
+                        }`}
+                      >
+                        {entry.eventType} · {entry.alertState}
+                      </span>
+                    </div>
+
+                    <p className="text-slate-200 text-xs leading-relaxed break-words">
+                      {entry.detail}
+                    </p>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
+                      <span>{entry.timestampLocal}</span>
+                      <span>
+                        GPS: {entry.lat.toFixed(4)}, {entry.lng.toFixed(4)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabla Completa Autoajustable con Scroll Táctil (`overflow-x: auto; -webkit-overflow-scrolling: touch;`) */}
+              <div className="geo-hybrid-table-scroll rounded-xl border border-slate-800 bg-[#0F172A]">
+                <table className="w-full text-left text-xs text-slate-200 border-collapse">
+                  <thead>
+                    <tr className="bg-slate-900/95 border-b border-slate-800 text-slate-400 text-[11px] uppercase">
+                      <th className="py-3 px-3 whitespace-nowrap">Fecha / Hora</th>
+                      <th className="py-3 px-3 whitespace-nowrap">Usuario & Rol</th>
+                      <th className="py-3 px-3 whitespace-nowrap">Tipo de Evento</th>
+                      <th className="py-3 px-3 whitespace-nowrap">Coordenadas GPS</th>
+                      <th className="py-3 px-3 whitespace-nowrap">Dispositivo</th>
+                      <th className="py-3 px-3">Detalle de Acción Realizada</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {filteredLogs.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className={`hover:bg-slate-800/40 transition-colors ${
+                          entry.alertState === 'CRITICA' ? 'bg-red-950/25' : ''
+                        }`}
+                      >
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-300 whitespace-nowrap tabular-nums">
+                          <div>{entry.timestampLocal}</div>
+                          <div className="text-[10px] text-slate-500">{entry.id}</div>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="font-bold text-white">{entry.nombreUsuario}</div>
+                          <div className="text-[11px] text-amber-400">{entry.rol}</div>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-bold text-slate-200 block">{entry.eventType}</span>
+                          <span
+                            className={`text-[10px] font-semibold ${
+                              entry.alertState === 'CRITICA'
+                                ? 'text-red-400'
+                                : entry.alertState === 'ADVERTENCIA'
+                                ? 'text-amber-400'
+                                : 'text-emerald-400'
+                            }`}
+                          >
+                            ● {entry.alertState}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-300 whitespace-nowrap tabular-nums">
+                          {entry.lat.toFixed(4)}, {entry.lng.toFixed(4)}
+                        </td>
+                        <td className="py-2.5 px-3 text-[11px] text-slate-400 whitespace-nowrap">
+                          {entry.deviceBrowser}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs text-slate-200 min-w-[240px] break-words">
+                          {entry.detail}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
+        </div>
+
+        {/* Sticky Bottom Action Bar on Smartphones */}
+        <div className="bg-[#0A2540] px-4 py-3 border-t border-slate-700 flex items-center justify-between gap-2 shrink-0">
+          <span className="text-xs text-slate-300 font-medium">
+            Total mostrado: <strong className="text-amber-400">{filteredLogs.length}</strong> eventos
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-600 cursor-pointer min-h-[44px]"
+          >
+            Cerrar Bitácora
+          </button>
         </div>
       </div>
     </div>

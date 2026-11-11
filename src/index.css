@@ -10,40 +10,289 @@
   --geolatina-font-size: 16px;
   --geolatina-radius: 0.75rem;
   --geolatina-font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* 1. Motor de Dimensiones Dinámicas y Fluidas (clamp) */
+  --geo-title-size: clamp(1rem, 1.4vw, 1.5rem);
+  --geo-kpi-value-size: clamp(1.25rem, 2vw, 2.2rem);
+  --geo-body-size: clamp(0.8rem, 0.95vw, 1rem);
+  --geo-fluid-gap: clamp(8px, 1.2vw, 16px);
+  --geo-fluid-pad: clamp(8px, 1.2vw, 16px);
 }
 
 @layer base {
   html {
     font-size: var(--geolatina-font-size);
+    box-sizing: border-box;
+    -webkit-text-size-adjust: 100%;
   }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.35) rgba(15, 23, 42, 0.6);
+  }
+
+  /* Universal Viewport (100dvw x 100dvh con fallback 100vw x 100vh) */
+  html,
+  body,
+  #root,
+  #app,
+  main {
+    width: 100vw;
+    width: 100dvw;
+    max-width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
   body {
     font-family: var(--geolatina-font-family);
     background-color: var(--geolatina-page-bg);
     color: var(--geolatina-text);
-    overflow-x: hidden;
-    min-height: 100dvh;
+    font-size: var(--geo-body-size);
+  }
+
+  h1,
+  .geo-fluid-title {
+    font-size: var(--geo-title-size);
+    line-height: 1.25;
+  }
+
+  table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+    font-size: var(--geo-body-size);
   }
 }
 
-/* Custom leaflet map adjustments */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  border-radius: var(--geolatina-radius);
-  z-index: 10;
-  font-family: inherit;
+/* Utilidades tipográficas fluidas con clamp() */
+.geo-kpi-value {
+  font-size: var(--geo-kpi-value-size) !important;
+  line-height: 1.15 !important;
 }
 
-/* Dark theme tiles filter option & custom popup */
-.leaflet-popup-content-wrapper {
-  background: #1e293b;
-  color: #f8fafc;
-  border-radius: var(--geolatina-radius);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-  border: 1px solid #334155;
+.geo-text-fluid {
+  font-size: var(--geo-body-size);
 }
-.leaflet-popup-tip {
-  background: #1e293b;
+
+/* Contenedor de tabla híbrida con scroll táctil suave */
+.geo-hybrid-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Área de trabajo principal debajo de la barra superior */
+.geo-workspace-shell {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-height: calc(100vh - 118px);
+  min-height: calc(100dvh - 118px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--geo-fluid-gap);
+  padding: var(--geo-fluid-pad);
+  box-sizing: border-box;
+}
+
+/* Filas de cuadros de resumen o KPIs auto-expansibles */
+.geo-kpi-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--geo-fluid-gap);
+  width: 100%;
+}
+
+/* Tarjetas y paneles con estiramiento vertical y horizontal al 100% */
+.geo-fluid-card {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--geo-fluid-pad);
+}
+
+/* Contenedor acoplado del mapa de Google Maps */
+.geo-map-surface {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  flex: 1 1 auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grid principal multipanel adaptable por dispositivo */
+.geo-main-split-grid {
+  display: grid;
+  width: 100%;
+  flex: 1 1 auto;
+  gap: var(--geo-fluid-gap);
+  align-items: stretch;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+/* Tercer panel exclusivo para Monitores Ultrawide / 4K (> 1920px) */
+.geo-ultrawide-third-panel {
+  display: none;
+}
+
+/* Modales y Ventanas Flotantes Adaptativas (Escritorio/Tablet: 95vw x 90dvh) */
+.geo-modal-fullviewport {
+  width: 95vw !important;
+  width: 95dvw !important;
+  max-width: 95vw !important;
+  max-width: 95dvw !important;
+  height: 90vh !important;
+  height: 90dvh !important;
+  max-height: 90vh !important;
+  max-height: 90dvh !important;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* ===================================================================
+   2.A) SMARTPHONES (Ancho <= 767px — Ejecutivos de Ventas en Ruta)
+   =================================================================== */
+@media (max-width: 767px) {
+  .geo-workspace-shell {
+    padding: clamp(8px, 2vw, 12px);
+    gap: clamp(8px, 2vw, 12px);
+    min-height: calc(100dvh - 110px);
+    padding-bottom: 76px; /* Espacio para la barra de pestañas inferiores rápidas */
+  }
+
+  /* KPIs en cuadrícula estricta de 2 columnas (repeat(2, 1fr)) al 100% */
+  .geo-kpi-auto-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Flujo vertical adaptable a 1 columna */
+  .geo-main-split-grid,
+  .geo-responsive-stack {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  /* Mapa con altura mínima garantizada en móvil (55dvh en vista mixta, calc(100dvh - 110px) en pestaña de mapa) */
+  .geo-map-surface {
+    min-height: 55vh !important;
+    min-height: 55dvh !important;
+  }
+
+  .geo-map-surface-mobile-full {
+    min-height: calc(100vh - 110px) !important;
+    min-height: calc(100dvh - 110px) !important;
+    height: calc(100dvh - 110px) !important;
+  }
+
+  /* Ergonomía táctil: botones >= 44px y font-size: 16px en inputs/selects para evitar auto-zoom de iOS */
+  button,
+  [role="button"] {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+
+  /* Modales en Smartphone: transformación automática a pantalla completa (100vw x 100dvh, sin bordes redondeados) */
+  .geo-modal-fullviewport {
+    width: 100vw !important;
+    width: 100dvw !important;
+    max-width: 100vw !important;
+    max-width: 100dvw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+/* ===================================================================
+   2.B) TABLETS E IPADS (Ancho 768px a 1024px — Supervisores en Campo)
+   =================================================================== */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  /* Portrait: KPIs en fila superior de 4 columnas, mapa al 100% (min-height: 50dvh) y paneles debajo al 100% */
+  .geo-kpi-auto-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+
+  .geo-main-split-grid,
+  .geo-responsive-stack {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .geo-map-surface {
+    min-height: 50vh !important;
+    min-height: 50dvh !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+  /* Landscape: Layout dividido al 100% con Mapa a la izquierda (60%) y Panel de Visitas/Detalles a la derecha (40%) */
+  .geo-kpi-auto-grid {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+  }
+
+  .geo-main-split-grid {
+    grid-template-columns: minmax(0, 60%) minmax(0, 40%) !important;
+    width: 100% !important;
+  }
+
+  .geo-map-surface {
+    min-height: 52dvh !important;
+  }
+}
+
+/* ===================================================================
+   2.C) LAPTOPS Y ESCRITORIO ESTÁNDAR (Ancho 1025px a 1920px)
+   =================================================================== */
+@media (min-width: 1025px) and (max-width: 1920px) {
+  .geo-main-split-grid {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+    width: 100%;
+  }
+}
+
+/* ===================================================================
+   2.D) MONITORES ULTRAWIDE Y 4K (Ancho > 1920px — Centro de Monitoreo / Gerencia)
+   =================================================================== */
+@media (min-width: 1921px) {
+  .geo-kpi-auto-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  /* Expande proporcionalmente Mapa (2.5fr) + Panel Recorrido/Visitas (1fr) + Panel Detalle/Auditoría (1fr) */
+  .geo-main-split-grid {
+    grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+    width: 100% !important;
+  }
+
+  .geo-ultrawide-third-panel {
+    display: flex !important;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+  }
 }
 
 /* Pulse animation for active GPS marker */
@@ -55,13 +304,6 @@
 
 .gps-live-ping {
   animation: gps-pulse 2s infinite;
-}
-
-/* Smartphone touch ergonomics (< 640px) */
-@media (max-width: 640px) {
-  button, select, input[type="text"], input[type="password"], input[type="number"] {
-    min-height: 40px;
-  }
 }
 
 /* Native A4 Print & PDF Export rules */
@@ -84,6 +326,7 @@
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
+    transform: none !important;
   }
   #geolatina-native-a4-printable thead {
     display: table-header-group !important;

@@ -31,12 +31,60 @@ export type LatinaRoleTier =
   | 'ADMINISTRADOR'
   | 'SISTEMAS';
 
-export function getRoleHierarchyLevel(rol: string | undefined): 1 | 2 | 3 | 4 {
-  const norm = (rol || '').toUpperCase();
+export interface SysproConfiguredRole {
+  codigo: string;
+  descripcion: string;
+  nivel: 1 | 2 | 3 | 4;
+  categoria: string;
+  mappedGeoLatinaRole: UserRole;
+}
+
+/**
+ * Matriz oficial de los 14 roles configurados en Syspro (LatinaSoft).
+ * Mapeados a los 4 niveles de jerarquía corporativa y perfiles operativos.
+ */
+export const SYSPRO_CONFIGURED_ROLES: SysproConfiguredRole[] = [
+  { codigo: 'ADMIN', descripcion: 'ADMIN', nivel: 4, categoria: 'Nivel 4 · Administrador / Dirección General', mappedGeoLatinaRole: 'DIRECTOR_GENERAL' },
+  { codigo: 'JEFE DE COMPRAS', descripcion: 'JEFE DE COMPRAS', nivel: 3, categoria: 'Nivel 3 · Jefatura Corporativa', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'JEFE DE VENTAS', descripcion: 'JEFE DE VENTAS', nivel: 3, categoria: 'Nivel 3 · Jefatura Comercial Regional', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'VENDEDOR', descripcion: 'VENDEDOR', nivel: 1, categoria: 'Nivel 1 · Ejecutivo de Ventas en Ruta', mappedGeoLatinaRole: 'EJECUTIVO_VENTAS' },
+  { codigo: 'SUPERVISOR', descripcion: 'SUPERVISOR', nivel: 2, categoria: 'Nivel 2 · Supervisión Regional', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'IMPULSADOR(A)', descripcion: 'IMPULSADOR(A)', nivel: 1, categoria: 'Nivel 1 · Fuerza en Campo / Merchandising', mappedGeoLatinaRole: 'EJECUTIVO_VENTAS' },
+  { codigo: 'AUXILIAR DE BODEGA', descripcion: 'AUXILIAR DE BODEGA', nivel: 1, categoria: 'Nivel 1 · Logística, Despacho y Transporte', mappedGeoLatinaRole: 'TRANSPORTISTA' },
+  { codigo: 'SUPERVISOR IMP', descripcion: 'SUPERVISOR IMP', nivel: 2, categoria: 'Nivel 2 · Supervisión de Impulso en Punto de Venta', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'SUPERVISOR BODEGA', descripcion: 'SUPERVISOR BODEGA', nivel: 2, categoria: 'Nivel 2 · Supervisión Logística y Despacho', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'JEFE DE PROYECTOS E INDUSTRIAS', descripcion: 'JEFE DE PROYECTOS E INDUSTRIAS', nivel: 3, categoria: 'Nivel 3 · Jefatura de Proyectos Industriales', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'JEFE NACIONAL DE VENTAS', descripcion: 'JEFE NACIONAL DE VENTAS', nivel: 3, categoria: 'Nivel 3 · Dirección Nacional Comercial', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+  { codigo: 'ASESOR CORPORATIVO', descripcion: 'ASESOR CORPORATIVO', nivel: 1, categoria: 'Nivel 1 · Ejecutivo Cuentas Corporativas B2B', mappedGeoLatinaRole: 'EJECUTIVO_VENTAS' },
+  { codigo: 'GESTOR(A) DE COBRANZA', descripcion: 'GESTOR(A) DE COBRANZA', nivel: 1, categoria: 'Nivel 1 · Gestión y Recaudación en Ruta', mappedGeoLatinaRole: 'EJECUTIVO_VENTAS' },
+  { codigo: 'JEFE LOGISTICA', descripcion: 'JEFE LOGISTICA', nivel: 3, categoria: 'Nivel 3 · Jefatura Nacional de Logística', mappedGeoLatinaRole: 'SUPERVISOR_REGIONAL' },
+];
+
+export function getRoleHierarchyLevel(rol: string | undefined, usuario?: string): 1 | 2 | 3 | 4 {
+  const cleanUser = (usuario || '').toUpperCase().trim();
+  if (cleanUser === 'XBRIONES') return 4;
+
+  const norm = (rol || '').toUpperCase().trim();
+  const matched = SYSPRO_CONFIGURED_ROLES.find((r) => r.codigo === norm);
+  if (matched) return matched.nivel;
+
   if (norm.includes('ADMIN') || norm.includes('SISTEMA')) return 4;
   if (norm.includes('JEFE') || norm.includes('GERENCIA') || norm.includes('DIRECTOR')) return 3;
   if (norm.includes('SUPERVISOR')) return 2;
-  return 1; // EJECUTIVO_VENTAS / TRANSPORTISTA (Nivel 1 - Operativo en ruta)
+  return 1; // Nivel 1 - Operativo en ruta
+}
+
+/**
+ * Valida si la sesión activa tiene acceso a las Configuraciones de Conexiones del Área de TIC.
+ * Regla de Seguridad: Exclusivamente disponible dentro del perfil 'ADMIN' y el usuario 'XBRIONES'.
+ */
+export function canUserAccessTicConfig(
+  session: { usuario?: string; rol?: string } | null | undefined
+): boolean {
+  if (!session) return false;
+  const cleanUser = (session.usuario || '').trim().toUpperCase();
+  const cleanRol = (session.rol || '').trim().toUpperCase();
+  return cleanRol === 'ADMIN' || cleanRol === 'ADMINISTRADOR' || cleanUser === 'XBRIONES';
 }
 
 export interface LatinaSysConfig {
@@ -51,9 +99,10 @@ export interface LatinaSysConfig {
   payloadFormat: 'JSON' | 'FORM_URLENCODED';
   defaultSucursal: string;
 
-  // Sección B: Seguridad, Cabeceras y Red
+  // Sección B: Seguridad, Cabeceras y Red + Google Maps Producción
   authHeaderType: 'X-Latina-ApiKey' | 'Authorization-Bearer' | 'Both';
   apiKey: string;
+  googleMapsApiKey: string;
   timeoutMs: number;
   sessionExpirationHours: number;
   operationMode: LatinaOperationMode;
@@ -196,40 +245,73 @@ export const AUTHORIZED_CONTINGENCY_USERS: AuthorizedLocalCredential[] = [
   },
 ];
 
+export function getProvisionedGoogleMapsKey(): string {
+  try {
+    const metaEnv = (import.meta as any)?.env;
+    if (metaEnv?.VITE_GOOGLE_MAPS_API_KEY) return String(metaEnv.VITE_GOOGLE_MAPS_API_KEY);
+    if (metaEnv?.GOOGLE_MAPS_PLATFORM_KEY) return String(metaEnv.GOOGLE_MAPS_PLATFORM_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.GOOGLE_MAPS_PLATFORM_KEY) return String(process.env.GOOGLE_MAPS_PLATFORM_KEY);
+      if (process.env.GOOGLE_MAPS_API_KEY) return String(process.env.GOOGLE_MAPS_API_KEY);
+      if (process.env.VITE_GOOGLE_MAPS_API_KEY) return String(process.env.VITE_GOOGLE_MAPS_API_KEY);
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
 export function getDefaultSysConfig(): LatinaSysConfig {
   return {
-    baseUrl: 'https://servidor-iis.industriallatina.com/LatinaWebApi',
-    authEndpoint: '/api/Seguridad/spConsultaUsuario',
-    permissionsEndpoint: '/api/Seguridad/AdmRelacionPermisoUsuario',
-    syncEndpoint: '/api/GeoLatina/SincronizarParametros',
-    auditLogEndpoint: '/api/GeoLatina/BitacoraDiaria',
-    gpsAlertsEndpoint: '/api/GeoLatina/AlertasFraudeGps',
+    baseUrl: 'http://181.78.203.134:7070',
+    authEndpoint: '/api/syspro/users',
+    permissionsEndpoint: '/api/syspro/permissions',
+    syncEndpoint: '/api/syspro/sync',
+    auditLogEndpoint: '/api/syspro/audit',
+    gpsAlertsEndpoint: '/api/syspro/gps-alerts',
     httpMethod: 'POST',
     payloadFormat: 'JSON',
     defaultSucursal: 'Matriz Guayaquil - Parque Industrial Latina',
 
     authHeaderType: 'X-Latina-ApiKey',
-    apiKey: 'LATINA-WEBAPI-IIS-2026-PROD-KEY',
+    apiKey: 'x7mRjQiJPbKUYECIETn0vNpNIH29ajAI',
+    googleMapsApiKey: getProvisionedGoogleMapsKey(),
     timeoutMs: 10000,
     sessionExpirationHours: 8,
-    operationMode: 'HYBRID_CONTINGENCY',
-    enableTechCredentials: true,
+    operationMode: 'PRODUCTION_LIVE',
+    enableTechCredentials: false,
     techUsername: 'sistemas',
     techPassword: 'Latina2026*',
 
     jsonMapping: {
-      successField: 'estado',
-      userIdField: 'CodUsuario',
-      fullNameField: 'NombreUsuario',
-      roleField: 'Perfil',
-      permissionsField: 'ListaPermisos',
-      tokenField: 'TokenSesion',
-      branchField: 'NombreSucursal',
+      successField: 'rol',
+      userIdField: 'user',
+      fullNameField: 'nombre',
+      roleField: 'rol',
+      permissionsField: 'permisos',
+      tokenField: 'apiKey',
+      branchField: 'supervisor',
     },
 
     lastUpdated: new Date().toISOString(),
-    updatedBy: 'Sistemas Industrial Latina S.A.',
+    updatedBy: 'Sistemas Industrial Latina S.A. (Syspro API)',
   };
+}
+
+export const GOOGLE_MAPS_DEFAULT_LIBRARIES = 'geometry,places,marker';
+export const GOOGLE_MAPS_SCRIPT_ELEMENT_ID = 'geolatina-google-maps-sdk';
+
+export function buildGoogleMapsScriptUrl(
+  apiKey: string,
+  libraries: string = GOOGLE_MAPS_DEFAULT_LIBRARIES
+): string {
+  const cleanKey = (apiKey || '').trim();
+  const cleanLibs = (libraries || GOOGLE_MAPS_DEFAULT_LIBRARIES).trim();
+  return 'https://maps.googleapis.com/maps/api/js?key=' + cleanKey + '&libraries=' + cleanLibs;
 }
 
 export function loadSysConfig(storage?: Pick<Storage, 'getItem' | 'setItem'>): LatinaSysConfig {
@@ -246,9 +328,21 @@ export function loadSysConfig(storage?: Pick<Storage, 'getItem' | 'setItem'>): L
       return defaults;
     }
     const parsed = JSON.parse(raw);
+
+    // Auto-migrar si el almacenamiento local aún tiene la URL ficticia previa
+    if (parsed.baseUrl && (parsed.baseUrl.includes('servidor-iis.industriallatina.com') || parsed.baseUrl.includes('localhost:5000'))) {
+      parsed.baseUrl = defaults.baseUrl;
+      parsed.authEndpoint = defaults.authEndpoint;
+      parsed.apiKey = defaults.apiKey;
+    }
+
     return {
       ...defaults,
       ...parsed,
+      googleMapsApiKey:
+        typeof parsed.googleMapsApiKey === 'string' && parsed.googleMapsApiKey.trim().length > 0
+          ? parsed.googleMapsApiKey.trim()
+          : defaults.googleMapsApiKey,
       jsonMapping: {
         ...defaults.jsonMapping,
         ...(parsed.jsonMapping || {}),
@@ -265,6 +359,7 @@ export function saveSysConfig(
 ): LatinaSysConfig {
   const updated: LatinaSysConfig = {
     ...config,
+    googleMapsApiKey: (config.googleMapsApiKey || '').trim(),
     lastUpdated: new Date().toISOString(),
   };
   const targetStorage = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
@@ -276,6 +371,144 @@ export function saveSysConfig(
     }
   }
   return updated;
+}
+
+/**
+ * Almacena específicamente `googleMapsApiKey` dentro de `geolatina_sys_config` en localStorage
+ * y devuelve la configuración actualizada.
+ */
+export function saveGoogleMapsApiKeyToSysConfig(
+  googleMapsApiKey: string,
+  storage?: Pick<Storage, 'getItem' | 'setItem'>
+): LatinaSysConfig {
+  const current = loadSysConfig(storage);
+  const nextConfig: LatinaSysConfig = {
+    ...current,
+    googleMapsApiKey: (googleMapsApiKey || '').trim(),
+    lastUpdated: new Date().toISOString(),
+  };
+  return saveSysConfig(nextConfig, storage);
+}
+
+let activeGoogleMapsLoadPromise: Promise<{
+  loaded: boolean;
+  scriptUrl: string;
+  error?: string;
+}> | null = null;
+let lastLoadedGoogleMapsKey: string | null = null;
+
+/**
+ * Carga dinámicamente el script oficial de Google Maps JavaScript API usando:
+ * 'https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&libraries=geometry,places,marker'
+ */
+export function loadGoogleMapsScriptDynamically(
+  apiKey?: string,
+  libraries: string = GOOGLE_MAPS_DEFAULT_LIBRARIES
+): Promise<{
+  loaded: boolean;
+  scriptUrl: string;
+  error?: string;
+}> {
+  const storedConfig = loadSysConfig();
+  const effectiveKey = (
+    (apiKey !== undefined ? apiKey : storedConfig.googleMapsApiKey) ||
+    getProvisionedGoogleMapsKey()
+  ).trim();
+
+  const scriptUrl = buildGoogleMapsScriptUrl(effectiveKey, libraries);
+
+  // Entorno sin DOM (ej. pruebas unitarias en Node.js)
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve({
+      loaded: Boolean(effectiveKey),
+      scriptUrl,
+      error: effectiveKey ? undefined : 'No se ha configurado una Google Maps API Key.',
+    });
+  }
+
+  if (!effectiveKey) {
+    return Promise.resolve({
+      loaded: false,
+      scriptUrl,
+      error: 'Google Maps API Key vacía en geolatina_sys_config.',
+    });
+  }
+
+  // Si ya está cargado Google Maps con la misma llave, resolver de inmediato
+  const gmapsLoaded = Boolean((window as any).google?.maps);
+  const existingScript = document.getElementById(
+    GOOGLE_MAPS_SCRIPT_ELEMENT_ID
+  ) as HTMLScriptElement | null;
+  const anyGmapsScript = document.querySelector(
+    'script[src*="maps.googleapis.com/maps/api/js"]'
+  ) as HTMLScriptElement | null;
+
+  if (gmapsLoaded && (lastLoadedGoogleMapsKey === effectiveKey || anyGmapsScript)) {
+    lastLoadedGoogleMapsKey = effectiveKey;
+    if (!existingScript && anyGmapsScript) {
+      anyGmapsScript.id = GOOGLE_MAPS_SCRIPT_ELEMENT_ID;
+      anyGmapsScript.setAttribute('data-geolatina-gmaps-url', scriptUrl);
+    }
+    return Promise.resolve({
+      loaded: true,
+      scriptUrl,
+    });
+  }
+
+  if (activeGoogleMapsLoadPromise && lastLoadedGoogleMapsKey === effectiveKey) {
+    return activeGoogleMapsLoadPromise;
+  }
+
+  // Si cambió la llave y existía un script previo creado por este cargador, actualizarlo
+  if (existingScript && lastLoadedGoogleMapsKey !== effectiveKey) {
+    existingScript.remove();
+    activeGoogleMapsLoadPromise = null;
+  }
+
+  lastLoadedGoogleMapsKey = effectiveKey;
+
+  activeGoogleMapsLoadPromise = new Promise((resolve) => {
+    // Si otro componente (como @vis.gl/react-google-maps) ya insertó el script en curso, sincronizar
+    const currentScript = document.querySelector(
+      'script[src*="maps.googleapis.com/maps/api/js"]'
+    ) as HTMLScriptElement | null;
+
+    if (currentScript && (window as any).google?.maps) {
+      currentScript.id = GOOGLE_MAPS_SCRIPT_ELEMENT_ID;
+      currentScript.setAttribute('data-geolatina-gmaps-url', scriptUrl);
+      resolve({ loaded: true, scriptUrl });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = GOOGLE_MAPS_SCRIPT_ELEMENT_ID;
+    script.type = 'text/javascript';
+    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + effectiveKey + '&libraries=' + libraries;
+    script.async = true;
+    script.defer = true;
+    script.setAttribute('data-geolatina-gmaps-key', effectiveKey);
+    script.setAttribute('data-geolatina-gmaps-libraries', libraries);
+
+    script.onload = () => {
+      resolve({
+        loaded: true,
+        scriptUrl: script.src,
+      });
+    };
+
+    script.onerror = () => {
+      activeGoogleMapsLoadPromise = null;
+      resolve({
+        loaded: false,
+        scriptUrl: script.src,
+        error: 'No se pudo cargar el script de Google Maps desde maps.googleapis.com.',
+      });
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return activeGoogleMapsLoadPromise;
 }
 
 export function loadUserSession(
@@ -373,33 +606,128 @@ export function mapRoleToGeoLatinaRole(rawRole: string): {
   geoRole: UserRole;
   mappedUserId: string;
 } {
-  const norm = (rawRole || '').toUpperCase();
+  const norm = (rawRole || '').toUpperCase().trim();
+  const matched = SYSPRO_CONFIGURED_ROLES.find((r) => r.codigo === norm);
+  if (matched) {
+    if (matched.mappedGeoLatinaRole === 'DIRECTOR_GENERAL') {
+      return { geoRole: 'DIRECTOR_GENERAL', mappedUserId: 'usr-dir' };
+    }
+    if (matched.mappedGeoLatinaRole === 'SUPERVISOR_REGIONAL') {
+      return {
+        geoRole: 'SUPERVISOR_REGIONAL',
+        mappedUserId: norm.includes('SUR') ? 'usr-sup-sur' : 'usr-sup-norte',
+      };
+    }
+    if (matched.mappedGeoLatinaRole === 'TRANSPORTISTA') {
+      return { geoRole: 'TRANSPORTISTA', mappedUserId: 'trans-1' };
+    }
+    return { geoRole: 'EJECUTIVO_VENTAS', mappedUserId: 'agt-1' };
+  }
+
   if (norm.includes('SISTEMA') || norm.includes('ADMIN') || norm.includes('DIRECTOR') || norm.includes('GERENTE')) {
     return { geoRole: 'DIRECTOR_GENERAL', mappedUserId: 'usr-dir' };
   }
   if (norm.includes('SUPERVISOR') || norm.includes('JEFE')) {
     return { geoRole: 'SUPERVISOR_REGIONAL', mappedUserId: 'usr-sup-norte' };
   }
-  if (norm.includes('TRANSPOR') || norm.includes('CHOFER') || norm.includes('LOGIST')) {
+  if (norm.includes('BODEGA') || norm.includes('TRANSPOR') || norm.includes('CHOFER') || norm.includes('LOGIST')) {
     return { geoRole: 'TRANSPORTISTA', mappedUserId: 'trans-1' };
   }
-  if (norm.includes('VENTA') || norm.includes('EJECUTIVO') || norm.includes('COMERCIAL') || norm.includes('AGENTE')) {
+  if (norm.includes('VENTA') || norm.includes('EJECUTIVO') || norm.includes('COMERCIAL') || norm.includes('AGENTE') || norm.includes('COBRAN') || norm.includes('IMPUL')) {
     return { geoRole: 'EJECUTIVO_VENTAS', mappedUserId: 'agt-1' };
   }
   return { geoRole: 'DIRECTOR_GENERAL', mappedUserId: 'usr-dir' };
 }
 
+export function generateSysproPermissions(rawRole: string): string[] {
+  const level = getRoleHierarchyLevel(rawRole);
+  const norm = (rawRole || '').toUpperCase();
+  const perms = ['GEOLATINA_ACCESO_GENERAL', 'SYSPRO_SESSION_ACTIVE'];
+
+  if (level === 4) {
+    perms.push(
+      'GEOLATINA_TOTAL_CONTROL',
+      'ADM_UI_BUILDER',
+      'ADM_CONFIG_SISTEMA',
+      'ADM_BITACORA_EXPORT',
+      'ADM_ANTIFRAUDE_GPS',
+      'ADM_GEOCERCAS_WRITE',
+      'ADM_REPORTES_EJECUTIVOS'
+    );
+  } else if (level === 3) {
+    perms.push(
+      'GEOLATINA_DIRECCION_COMERCIAL',
+      'ADM_BITACORA_EXPORT',
+      'ADM_ANTIFRAUDE_GPS',
+      'ADM_REPORTES_EJECUTIVOS'
+    );
+  } else if (level === 2) {
+    perms.push(
+      'GEOLATINA_SUPERVISION_ZONA',
+      'ADM_BITACORA_EXPORT',
+      'ADM_ANTIFRAUDE_GPS',
+      'ADM_GEOCERCAS_WRITE'
+    );
+  } else {
+    if (norm.includes('BODEGA') || norm.includes('LOGIST')) {
+      perms.push('GEOLATINA_DESPACHO_RUTA', 'REGISTRO_ENTREGAS_BODEGA', 'EMISION_SOS_PANICO');
+    } else {
+      perms.push('GEOLATINA_RUTA_MOVIL', 'REGISTRO_VISITAS_EVIDENCIA', 'EMISION_SOS_PANICO');
+    }
+  }
+  return perms;
+}
+
 /**
- * Adaptador flexible para transformar cualquier respuesta JSON de LatinaWebApi (IIS / SQL Server)
+ * Adaptador flexible para transformar cualquier respuesta JSON de Syspro Users API / LatinaSoft
  * en un objeto de sesión corporativo estandarizado para GEOLATINA.
  */
 export function adaptLatinaApiResponse(
-  rawJson: Record<string, any>,
+  rawJson: any,
   config: LatinaSysConfig,
   requestUser: string,
   requestSucursal: string
 ): LatinaUserSession | null {
-  if (!rawJson || typeof rawJson !== 'object') return null;
+  if (!rawJson) return null;
+
+  // Manejo de respuesta en arreglo (Syspro API devuelve: [{ nombre, user, pass, rol, supervisor, apiKey }])
+  if (Array.isArray(rawJson)) {
+    if (rawJson.length === 0) return null;
+    const userRecord = rawJson[0];
+    if (!userRecord || typeof userRecord !== 'object') return null;
+
+    const roleName = String(userRecord.rol || 'VENDEDOR').trim();
+    const cleanUserName = String(userRecord.user || requestUser).trim();
+    const fullName = String(userRecord.nombre || userRecord.Nombre || userRecord.name || cleanUserName).trim();
+    const branchOrSupervisor = String(userRecord.supervisor || requestSucursal || config.defaultSucursal).trim();
+    const isTicAuthorized = canUserAccessTicConfig({ usuario: cleanUserName, rol: roleName });
+    const { geoRole, mappedUserId } = isTicAuthorized
+      ? { geoRole: 'DIRECTOR_GENERAL' as UserRole, mappedUserId: 'usr-dir' }
+      : mapRoleToGeoLatinaRole(roleName);
+    const now = Date.now();
+    const expiresAt = now + config.sessionExpirationHours * 3600 * 1000;
+    const permisos = generateSysproPermissions(isTicAuthorized ? 'ADMIN' : roleName);
+    const level = getRoleHierarchyLevel(roleName, cleanUserName);
+
+    return {
+      usuario: cleanUserName,
+      nombreCompleto: fullName,
+      rol: roleName, // ROL EXACTO OBTENIDO DE LA API (campo 'rol')
+      hierarchyLevel: level,
+      admUserRole: `Syspro_${roleName.replace(/[\s\(\)\/]+/g, '_')}_N${level}`,
+      permisos,
+      token: String(userRecord.apiKey || config.apiKey || `syspro-token-${now}`),
+      sucursal: branchOrSupervisor,
+      aplicacion: 'GEOLATINA',
+      timestamp: now,
+      expiresAt,
+      authMode: 'API_IIS_LIVE',
+      mappedGeoLatinaRole: geoRole,
+      mappedGeoLatinaUserId: mappedUserId,
+    };
+  }
+
+  if (typeof rawJson !== 'object') return null;
 
   const { jsonMapping } = config;
   const rawSuccess = extractMappedField(rawJson, jsonMapping.successField, [
@@ -408,27 +736,8 @@ export function adaptLatinaApiResponse(
     'ok',
     'autenticado',
     'valido',
+    'rol',
   ]);
-
-  const isSuccess =
-    rawSuccess === true ||
-    rawSuccess === 1 ||
-    String(rawSuccess).toLowerCase() === 'true' ||
-    String(rawSuccess).toLowerCase() === 'ok' ||
-    String(rawSuccess).toLowerCase() === 'activo' ||
-    String(rawSuccess) === '1';
-
-  if (!isSuccess) {
-    return null;
-  }
-
-  const fullName =
-    extractMappedField(rawJson, jsonMapping.fullNameField, [
-      'nombreCompleto',
-      'NombreUsuario',
-      'nombres',
-      'name',
-    ]) || requestUser;
 
   const roleRaw =
     extractMappedField(rawJson, jsonMapping.roleField, [
@@ -436,8 +745,22 @@ export function adaptLatinaApiResponse(
       'Perfil',
       'AdmUser',
       'cargo',
-    ]) || 'ADMINISTRADOR';
+    ]) || rawJson.rol;
 
+  if (!rawSuccess && !roleRaw) {
+    return null;
+  }
+
+  const fullName =
+    extractMappedField(rawJson, jsonMapping.fullNameField, [
+      'nombre',
+      'nombreCompleto',
+      'NombreUsuario',
+      'nombres',
+      'name',
+    ]) || requestUser;
+
+  const roleName = String(roleRaw || 'VENDEDOR').trim();
   const permsRaw = extractMappedField(rawJson, jsonMapping.permissionsField, [
     'permisos',
     'ListaPermisos',
@@ -450,7 +773,7 @@ export function adaptLatinaApiResponse(
   } else if (typeof permsRaw === 'string' && permsRaw.trim()) {
     permisos = permsRaw.split(',').map(s => s.trim());
   } else {
-    permisos = ['GEOLATINA_ACCESO_GENERAL', 'LATINASOFT_SYNC_ACTIVO'];
+    permisos = generateSysproPermissions(roleName);
   }
 
   const token =
@@ -612,50 +935,57 @@ export async function executeLatinaApiFetch<T = any>(
  * Herramienta de Diagnóstico: Probar Conexión con API (Ping)
  */
 export async function pingLatinaApiServer(config: LatinaSysConfig): Promise<PingDiagnosticResult> {
-  const targetUrl = buildApiUrl(config.baseUrl, config.authEndpoint);
+  const isBrowser = typeof window !== 'undefined';
+  const isBrowserHttps = isBrowser && window.location.protocol === 'https:';
+  // Si estamos en navegador HTTPS, usamos el proxy local /api/syspro/users para evitar mixed content con http://
+  const targetUrl = isBrowserHttps
+    ? '/api/syspro/users'
+    : buildApiUrl(config.baseUrl, config.authEndpoint || '/api/syspro/users');
+
   const startMs = performance.now();
   const controller = new AbortController();
   const timeoutMs = Math.max(1500, Math.min(config.timeoutMs || 10000, 12000));
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const headers = buildAuthHeaders(config, null);
     const response = await fetch(targetUrl, {
-      method: config.httpMethod,
-      headers,
-      body:
-        config.httpMethod === 'POST'
-          ? JSON.stringify({
-              ping: true,
-              aplicacion: 'GEOLATINA',
-              timestamp: new Date().toISOString(),
-            })
-          : undefined,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        user: '',
+        pass: '',
+        ApiKey: (config.apiKey || 'x7mRjQiJPbKUYECIETn0vNpNIH29ajAI').trim(),
+      }),
       signal: controller.signal,
     });
 
     clearTimeout(timer);
     const latencyMs = Math.max(1, Math.round(performance.now() - startMs));
+    const isOk = response.ok;
 
     return {
-      ok: response.ok || response.status === 401 || response.status === 400 || response.status === 405,
+      ok: isOk,
       timestamp: new Date().toLocaleTimeString(),
       targetUrl,
       latencyMs,
       httpStatus: response.status,
-      statusText: response.statusText || 'Respuesta recibida de IIS',
+      statusText: isOk ? 'Syspro Users API Operativa' : response.statusText,
       corsBlocked: false,
       networkError: false,
       serverReachable: true,
-      diagnosticSummary: response.ok
-        ? `Conexión exitosa con LatinaWebApi (${latencyMs} ms) — HTTP ${response.status}`
-        : `Servidor IIS alcanzable (${latencyMs} ms) — Código HTTP ${response.status}`,
+      diagnosticSummary: isOk
+        ? `Conexión exitosa con Syspro Users API (${latencyMs} ms) — HTTP ${response.status}`
+        : `Servidor Syspro respondió con código HTTP ${response.status}`,
       technicalDetails: [
-        `URL probada: ${targetUrl}`,
-        `Método HTTP: ${config.httpMethod} (${config.payloadFormat})`,
-        `Tiempo de respuesta: ${latencyMs} ms (Timeout máx: ${config.timeoutMs} ms)`,
-        `Código HTTP devuelto: ${response.status} ${response.statusText}`,
-        `Cabecera enviada: ${config.authHeaderType}`,
+        `URL verificada: ${targetUrl}`,
+        `Host base configurado: ${config.baseUrl}`,
+        `Endpoint de autenticación: ${config.authEndpoint || '/api/syspro/users'}`,
+        `Tiempo de respuesta: ${latencyMs} ms`,
+        `Código HTTP: ${response.status} ${response.statusText}`,
+        `ApiKey activa: ${config.apiKey ? config.apiKey.slice(0, 10) + '...' : 'x7mRjQiJPb...'}`,
       ],
     };
   } catch (err: any) {
@@ -670,36 +1000,34 @@ export async function pingLatinaApiServer(config: LatinaSysConfig): Promise<Ping
       targetUrl,
       latencyMs,
       httpStatus: null,
-      statusText: isTimeout ? 'TIMEOUT' : 'RED / CORS BLOCKED',
+      statusText: isTimeout ? 'TIMEOUT' : 'RED / FALLO DE CONEXIÓN',
       corsBlocked: isCorsOrNetwork,
       networkError: true,
       serverReachable: false,
       diagnosticSummary: isTimeout
-        ? `Timeout tras ${latencyMs} ms: El servidor IIS no respondió dentro del límite (${config.timeoutMs} ms).`
-        : `No se pudo establecer enlace directo con IIS (${latencyMs} ms). Posible desconexión de VPN corporativa, certificado SSL privado o bloqueo CORS en IIS.`,
+        ? `Timeout tras ${latencyMs} ms: El servidor Syspro no respondió dentro del límite (${config.timeoutMs} ms).`
+        : `No se pudo conectar con el servidor Syspro (${latencyMs} ms). Verifique la red o enlace con ${config.baseUrl}.`,
       technicalDetails: [
         `URL objetivo: ${targetUrl}`,
         `Tiempo transcurrido: ${latencyMs} ms`,
-        `Detalle de excepción: ${err?.message || 'TypeError: Failed to fetch'}`,
-        isCorsOrNetwork
-          ? `Diagnóstico IIS/CORS: Verifique en el web.config de LatinaWebApi la cabecera Access-Control-Allow-Origin y que la VPN corporativa esté activa.`
-          : `Diagnóstico de Red: El host tardó más de ${config.timeoutMs} ms en responder.`,
-        config.operationMode === 'HYBRID_CONTINGENCY'
-          ? `Resiliencia Activa: El modo "Híbrido / Contingencia" está habilitado para permitir operación local autorizada.`
-          : `Modo Producción Estricto: Las sesiones requerirán respuesta en vivo de IIS.`,
+        `Detalle del error: ${err?.message || 'Error de red al conectar con Syspro'}`,
+        `Host remoto: ${config.baseUrl}`,
       ],
     };
   }
 }
 
 /**
- * Motor Principal de Autenticación de Usuarios GEOLATINA <-> LatinaSoft
+ * Motor Principal de Autenticación de Usuarios Syspro (LatinaSoft)
+ * Integra endpoint POST /api/syspro/users con { user, pass, ApiKey }
+ * Valida que si la API responde con arreglo vacío [], las credenciales son incorrectas.
  */
 export async function authenticateLatinaUser(
   credentials: {
     usuario: string;
     password: string;
     sucursal?: string;
+    apiKey?: string;
   },
   config: LatinaSysConfig = loadSysConfig()
 ): Promise<{
@@ -712,18 +1040,19 @@ export async function authenticateLatinaUser(
   const cleanUser = (credentials.usuario || '').trim();
   const cleanPassword = credentials.password || '';
   const cleanSucursal = (credentials.sucursal || config.defaultSucursal).trim();
+  const effectiveApiKey = (credentials.apiKey || config.apiKey || 'x7mRjQiJPbKUYECIETn0vNpNIH29ajAI').trim();
 
   if (!cleanUser || !cleanPassword) {
     return {
       ok: false,
-      error: 'Por favor ingrese su Usuario LatinaSoft y Contraseña corporativa.',
+      error: 'Por favor ingrese su Usuario Syspro y Contraseña corporativa.',
       latencyMs: 0,
     };
   }
 
   const startMs = performance.now();
 
-  // 1. Verificar si es la Credencial Técnica de Sistemas (si está habilitada)
+  // 1. Verificar si es la Credencial Técnica de Sistemas (si está habilitada en configuración)
   if (
     config.enableTechCredentials &&
     cleanUser.toLowerCase() === config.techUsername.trim().toLowerCase() &&
@@ -732,17 +1061,12 @@ export async function authenticateLatinaUser(
     const now = Date.now();
     const techSession: LatinaUserSession = {
       usuario: cleanUser,
-      nombreCompleto: 'Administrador Técnico de Sistemas (LatinaSoft)',
-      rol: 'SISTEMAS',
-      admUserRole: 'AdmUser_Sistemas_Root',
-      permisos: [
-        'SYS_CONFIG_FULL',
-        'API_MAPPING_ADMIN',
-        'GEOLATINA_TOTAL_CONTROL',
-        'ADM_GEOCERCAS_WRITE',
-        'ADM_REPORTES_EJECUTIVOS',
-      ],
-      token: `latina-tech-token-${now}`,
+      nombreCompleto: 'Administrador Técnico de Sistemas (Root)',
+      rol: 'ADMIN',
+      hierarchyLevel: 4,
+      admUserRole: 'Syspro_ADMIN_N4',
+      permisos: generateSysproPermissions('ADMIN'),
+      token: `syspro-tech-token-${now}`,
       sucursal: cleanSucursal,
       aplicacion: 'GEOLATINA',
       timestamp: now,
@@ -760,43 +1084,95 @@ export async function authenticateLatinaUser(
     };
   }
 
-  // 2. Intentar autenticación real contra el servidor IIS LatinaWebApi con AbortController
-  const loginUrl = buildApiUrl(config.baseUrl, config.authEndpoint);
-  const controller = new AbortController();
-  const timeoutMs = Math.max(1500, config.timeoutMs || 10000);
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // 2. Autenticación en vivo contra Syspro Users API:
+  // Si estamos en un navegador web, intentamos el proxy local '/api/syspro/users' primero
+  // para blindar contra bloqueos de Mixed Content (HTTPS -> HTTP) o restricciones CORS.
+  const isBrowser = typeof window !== 'undefined';
+  const isBrowserHttps = isBrowser && window.location.protocol === 'https:';
 
-  const payloadObj = {
-    usuario: cleanUser,
-    password: cleanPassword,
-    aplicacion: 'GEOLATINA',
-    sucursal: cleanSucursal,
+  const primaryUrl = isBrowserHttps
+    ? '/api/syspro/users'
+    : buildApiUrl(config.baseUrl, config.authEndpoint || '/api/syspro/users');
+  const fallbackUrl = buildApiUrl(config.baseUrl, config.authEndpoint || '/api/syspro/users');
+
+  const timeoutMs = Math.max(1500, config.timeoutMs || 10000);
+  const sysproPayload = {
+    user: cleanUser,
+    pass: cleanPassword,
+    ApiKey: effectiveApiKey,
   };
 
+  const attemptFetch = async (targetUrl: string) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(sysproPayload),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      return response;
+    } catch (e) {
+      clearTimeout(timer);
+      throw e;
+    }
+  };
+
+  let response: Response | null = null;
   try {
-    const headers = buildAuthHeaders(config, null);
-    const bodyPayload =
-      config.payloadFormat === 'JSON'
-        ? JSON.stringify(payloadObj)
-        : new URLSearchParams(payloadObj as Record<string, string>).toString();
+    response = await attemptFetch(primaryUrl);
+  } catch {
+    if (primaryUrl !== fallbackUrl) {
+      try {
+        response = await attemptFetch(fallbackUrl);
+      } catch {
+        // Red no alcanzable
+      }
+    }
+  }
 
-    const finalUrl =
-      config.httpMethod === 'GET'
-        ? `${loginUrl}?${new URLSearchParams(payloadObj as Record<string, string>).toString()}`
-        : loginUrl;
+  const latencyMs = Math.max(1, Math.round(performance.now() - startMs));
 
-    const response = await fetch(finalUrl, {
-      method: config.httpMethod,
-      headers,
-      body: config.httpMethod === 'POST' ? bodyPayload : undefined,
-      signal: controller.signal,
-    });
+  if (response && response.ok) {
+    let json: any = null;
+    try {
+      json = await response.json();
+    } catch {
+      return {
+        ok: false,
+        error: 'El servidor Syspro devolvió una respuesta que no es JSON válido.',
+        latencyMs,
+        httpStatus: response.status,
+      };
+    }
 
-    clearTimeout(timer);
-    const latencyMs = Math.max(1, Math.round(performance.now() - startMs));
+    // Regla crítica indicada por el usuario:
+    // "Recordar que si no trae informacion y el arreglo es vacio[] es porque estan mal las credenciales."
+    if (Array.isArray(json)) {
+      if (json.length === 0) {
+        return {
+          ok: false,
+          error: 'Credenciales incorrectas: El usuario o contraseña ingresados no son válidos en Syspro.',
+          latencyMs,
+          httpStatus: 200,
+        };
+      }
 
-    if (response.ok) {
-      const json = await response.json();
+      const adapted = adaptLatinaApiResponse(json, config, cleanUser, cleanSucursal);
+      if (adapted) {
+        return {
+          ok: true,
+          session: adapted,
+          latencyMs,
+          httpStatus: 200,
+        };
+      }
+    } else if (typeof json === 'object' && json !== null) {
       const adapted = adaptLatinaApiResponse(json, config, cleanUser, cleanSucursal);
       if (adapted) {
         return {
@@ -806,74 +1182,29 @@ export async function authenticateLatinaUser(
           httpStatus: response.status,
         };
       }
-      return {
-        ok: false,
-        error: 'Credenciales rechazadas por LatinaWebApi o estructura JSON no coincide con el mapeo configurado.',
-        latencyMs,
-        httpStatus: response.status,
-      };
-    }
-
-    // Si el servidor IIS devolvió 401/403 explícitamente, rechazar credenciales
-    if (response.status === 401 || response.status === 403) {
-      return {
-        ok: false,
-        error: `Acceso denegado por servidor LatinaSoft (HTTP ${response.status}): Usuario o contraseña inválidos.`,
-        latencyMs,
-        httpStatus: response.status,
-      };
-    }
-  } catch {
-    clearTimeout(timer);
-    // Fallo de red / VPN / IIS offline: evaluamos modo de operación abajo
-  }
-
-  const latencyMs = Math.max(1, Math.round(performance.now() - startMs));
-
-  // 3. Si el modo es Híbrido / Contingencia, validar contra el padrón local autorizado
-  if (config.operationMode === 'HYBRID_CONTINGENCY') {
-    const matchedLocal = AUTHORIZED_CONTINGENCY_USERS.find(
-      u => u.usuario.toLowerCase() === cleanUser.toLowerCase() && u.password === cleanPassword
-    );
-
-    if (matchedLocal) {
-      const now = Date.now();
-      const contingencySession: LatinaUserSession = {
-        usuario: matchedLocal.usuario,
-        nombreCompleto: matchedLocal.nombreCompleto,
-        rol: matchedLocal.rol,
-        admUserRole: matchedLocal.admUserRole,
-        permisos: matchedLocal.permisos,
-        token: `latina-contingency-jwt-${now}`,
-        sucursal: cleanSucursal || matchedLocal.sucursal,
-        aplicacion: 'GEOLATINA',
-        timestamp: now,
-        expiresAt: now + config.sessionExpirationHours * 3600 * 1000,
-        authMode: 'CONTINGENCIA_LOCAL',
-        mappedGeoLatinaRole: matchedLocal.mappedGeoLatinaRole,
-        mappedGeoLatinaUserId: matchedLocal.mappedGeoLatinaUserId,
-      };
-
-      return {
-        ok: true,
-        session: contingencySession,
-        latencyMs,
-        httpStatus: 200,
-      };
     }
 
     return {
       ok: false,
-      error:
-        'Credenciales no válidas. Servidor IIS sin enlace directo y el usuario/contraseña no coincide con cuentas autorizadas en Contingencia ni con la credencial técnica de Sistemas.',
+      error: 'Credenciales rechazadas por Syspro o estructura JSON no reconocida.',
       latencyMs,
+      httpStatus: response.status,
     };
   }
 
-  // 4. Modo Producción Estricto y falló la red
+  if (response && (response.status === 401 || response.status === 403)) {
+    return {
+      ok: false,
+      error: `Acceso denegado por servidor Syspro (HTTP ${response.status}): Usuario o contraseña inválidos.`,
+      latencyMs,
+      httpStatus: response.status,
+    };
+  }
+
+  // 3. Si falló la conexión por red hacia el servidor Syspro
   return {
     ok: false,
-    error: `No fue posible validar contra LatinaWebApi (${config.baseUrl}). Verifique su VPN corporativa o active el modo "Híbrido / Contingencia" en Configuración de Sistema.`,
+    error: `No fue posible conectar con el servidor Syspro (${config.baseUrl}). Verifique que la IP y puerto estén en línea o use Configuración de Sistema.`,
     latencyMs,
   };
 }

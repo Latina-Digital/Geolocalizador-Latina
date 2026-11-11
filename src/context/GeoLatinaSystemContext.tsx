@@ -17,6 +17,7 @@ import {
   executeLatinaApiFetch,
   pingLatinaApiServer,
   getRoleHierarchyLevel,
+  canUserAccessTicConfig,
 } from '../services/latinaApiEngine';
 import {
   GeoAuditLogEntry,
@@ -118,6 +119,7 @@ interface GeoLatinaSystemContextValue extends GeoLatinaGlobalBridge {
     usuario: string;
     password: string;
     sucursal?: string;
+    apiKey?: string;
   }) => Promise<{
     ok: boolean;
     session?: LatinaUserSession;
@@ -435,7 +437,7 @@ export const GeoLatinaSystemProvider: React.FC<{
   }, []);
 
   const loginWithLatinaSoft = useCallback(
-    async (credentials: { usuario: string; password: string; sucursal?: string }) => {
+    async (credentials: { usuario: string; password: string; sucursal?: string; apiKey?: string }) => {
       const result = await authenticateLatinaUser(credentials, config);
       if (result.ok && result.session) {
         const enriched: LatinaUserSession = {
@@ -502,6 +504,8 @@ export const GeoLatinaSystemProvider: React.FC<{
         return next;
       });
     }
+    setIsSysConfigOpen(false);
+    setIsUiBuilderOpen(false);
     saveUserSession(null);
     setUser(null);
   }, [user]);
@@ -527,8 +531,12 @@ export const GeoLatinaSystemProvider: React.FC<{
         apiFetch,
         apiSemaphore,
         lastPingResult,
-        isSysConfigOpen,
-        openSysConfigModal: () => setIsSysConfigOpen(true),
+        isSysConfigOpen: isSysConfigOpen && canUserAccessTicConfig(user),
+        openSysConfigModal: () => {
+          if (canUserAccessTicConfig(user)) {
+            setIsSysConfigOpen(true);
+          }
+        },
         closeSysConfigModal: () => setIsSysConfigOpen(false),
         isAuditHistoryOpen,
         openAuditHistoryModal: () => setIsAuditHistoryOpen(true),
@@ -536,8 +544,12 @@ export const GeoLatinaSystemProvider: React.FC<{
         isGpsFraudDrawerOpen,
         openGpsFraudDrawer: () => setIsGpsFraudDrawerOpen(true),
         closeGpsFraudDrawer: () => setIsGpsFraudDrawerOpen(false),
-        isUiBuilderOpen,
-        openUiBuilderModal: () => setIsUiBuilderOpen(true),
+        isUiBuilderOpen: isUiBuilderOpen && canUserAccessTicConfig(user),
+        openUiBuilderModal: () => {
+          if (canUserAccessTicConfig(user)) {
+            setIsUiBuilderOpen(true);
+          }
+        },
         closeUiBuilderModal: () => setIsUiBuilderOpen(false),
         urgentFraudPopup,
         dismissUrgentFraudPopup: () => setUrgentFraudPopup(null),
